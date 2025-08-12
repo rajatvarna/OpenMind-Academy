@@ -1,0 +1,64 @@
+.submission-detail {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.submission-detail h2 {
+  margin-top: 0;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 15px;
+}
+
+.author-info {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+.content-section {
+  margin-bottom: 30px;
+}
+
+.content-section h3 {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.content-section p {
+  line-height: 1.6;
+}
+
+.actions {
+  text-align: right;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+}
+
+.actions button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-size: 1em;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.approve-btn {
+  background-color: #5cb85c;
+}
+
+.approve-btn:hover {
+  background-color: #4cae4c;
+}
+
+.reject-btn {
+  background-color: #d9534f;
+}
+
+.reject-btn:hover {
+  background-color: #c9302c;
+}

@@ -1,0 +1,31 @@
+.courseTitle {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.courseDescription {
+  font-size: 1.25rem;
+  color: #555;
+  margin-bottom: 3rem;
+}
+
+.lessonList h2 {
+  font-size: 2rem;
+  border-bottom: 1px solid #eaeaea;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lessonList ul {
+  list-style: none;
+  padding: 0;
+}
+
+.lessonItem {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background-color: #fff;
+  font-size: 1.2rem;
+}

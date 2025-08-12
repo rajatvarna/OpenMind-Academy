@@ -1,0 +1,42 @@
+.moderation-queue {
+  padding: 10px;
+}
+
+.moderation-queue h2 {
+  font-size: 1.2em;
+  margin-top: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.moderation-queue ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.moderation-queue li {
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.moderation-queue li:hover {
+  background-color: #f0f0f0;
+}
+
+.submission-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.submission-author {
+  font-size: 0.9em;
+  color: #555;
+}
+
+.error {
+  color: #d9534f;
+  padding: 15px;
+}

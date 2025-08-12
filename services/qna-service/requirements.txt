@@ -1,0 +1,13 @@
+# High-performance web framework for building APIs
+fastapi==0.103.1
+# ASGI server for running FastAPI
+uvicorn[standard]==0.23.2
+# For data validation
+pydantic==2.4.2
+
+# This library would be used for generating embeddings.
+# We include it to show the intended stack.
+sentence-transformers==2.2.2
+
+# For making HTTP requests to a real LLM API
+requests==2.31.0
