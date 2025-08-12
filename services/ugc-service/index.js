@@ -2,7 +2,7 @@ const express = require('express');
 const amqp = require('amqplib');
 const helmet = require('helmet');
 const cors = require('cors');
-const morgan = 'morgan';
+const morgan = require('morgan');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 3002;
 // Middleware
 app.use(helmet());
 app.use(cors());
+app.use(morgan('combined')); // Request logging
 app.use(express.json());
 
 // --- RabbitMQ Connection and Publishing ---

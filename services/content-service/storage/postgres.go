@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/free-education/content-service/model"
-	"github.comcom/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 /*
