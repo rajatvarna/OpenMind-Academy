@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-// This is your test secret API key.
 // In a real application, load this from an environment variable.
-const stripe = require('stripe')('sk_test_51...PLACEHOLDER');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 app.use(cors()); // Enable CORS for the frontend to call this

@@ -4,9 +4,8 @@ import { AuthProvider } from '../context/AuthContext';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
-// Use a placeholder publishable key.
 // In a real application, load this from an environment variable.
-const stripePromise = loadStripe('pk_test_51...PLACEHOLDER');
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 // This App component is the top-level component which will be common across all different pages.
 // You can use this App component to keep state when navigating between pages, for example.
