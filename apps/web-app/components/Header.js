@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Header.module.css';
+import SearchBar from './SearchBar';
 
 const Header = () => {
   const { user, stats, logout, loading } = useAuth();
@@ -12,6 +13,9 @@ const Header = () => {
         <Link href="/" legacyBehavior>
           <a className={styles.logo}>FreeEdu</a>
         </Link>
+        <div className={styles.searchContainer}>
+          <SearchBar />
+        </div>
         <nav>
           <ul className={styles.navList}>
             <li>
@@ -26,8 +30,12 @@ const Header = () => {
             </li>
             {loading ? null : user ? (
               <>
-                <li className={styles.userName}>
-                  Hello, {user.name} (⭐ {stats.score || 0})
+                <li>
+                  <Link href="/profile" legacyBehavior>
+                    <a className={styles.userName}>
+                      Hello, {user.name} (⭐ {stats.score || 0})
+                    </a>
+                  </Link>
                 </li>
                 <li>
                   <button onClick={logout} className={styles.logoutButton}>Logout</button>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { AuthProvider } from './context/AuthContext';
 
 // Import screen components (we will create these next)
 import HomeScreen from './screens/HomeScreen';
@@ -11,9 +12,10 @@ const Stack = createNativeStackNavigator();
 
 function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
-        <Stack.Screen
+    <AuthProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Home">
+          <Stack.Screen
           name="Home"
           component={HomeScreen}
           options={{ title: 'Courses' }}
@@ -30,6 +32,7 @@ function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    </AuthProvider>
   );
 }
 

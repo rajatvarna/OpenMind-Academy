@@ -11,6 +11,7 @@ type User struct {
 	PasswordHash string    `json:"-"` // Omit from JSON output
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
+	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

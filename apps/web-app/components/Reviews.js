@@ -14,29 +14,35 @@ const StarRating = ({ rating }) => {
 
 export default function Reviews({ courseId }) {
   const [reviews, setReviews] = useState([]);
+  const [nextCursor, setNextCursor] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const fetchReviews = async (cursor) => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/reviews?cursor=${cursor}&limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        // Append new reviews to the existing list
+        setReviews(prev => cursor === 0 ? data.data : [...prev, ...data.data]);
+        setNextCursor(data.next_cursor);
+      }
+    } catch (error) {
+      console.error('Failed to fetch reviews', error);
+    }
+  };
 
   useEffect(() => {
     if (!courseId) return;
-
-    const fetchReviews = async () => {
-      try {
-        setIsLoading(true);
-        // This will be a new API route we need to create
-        const res = await fetch(`/api/courses/${courseId}/reviews`);
-        if (res.ok) {
-          const data = await res.json();
-          setReviews(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch reviews', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchReviews();
+    setIsLoading(true);
+    fetchReviews(0).finally(() => setIsLoading(false));
   }, [courseId]);
+
+  const handleLoadMore = () => {
+    if (!nextCursor) return;
+    setIsLoadingMore(true);
+    fetchReviews(nextCursor).finally(() => setIsLoadingMore(false));
+  };
 
   if (isLoading) {
     return <div>Loading reviews...</div>;
@@ -58,6 +64,11 @@ export default function Reviews({ courseId }) {
           <small>{new Date(review.created_at).toLocaleDateString()}</small>
         </div>
       ))}
+      {nextCursor > 0 && (
+        <button onClick={handleLoadMore} disabled={isLoadingMore} className={styles.loadMoreButton}>
+          {isLoadingMore ? 'Loading...' : 'Load More Reviews'}
+        </button>
+      )}
     </div>
   );
 }

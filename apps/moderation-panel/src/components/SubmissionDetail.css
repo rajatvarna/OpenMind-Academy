@@ -62,3 +62,23 @@
 .reject-btn:hover {
   background-color: #c9302c;
 }
+
+.actions.destructive {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #d9534f;
+  text-align: right;
+}
+
+.delete-btn {
+  background: none;
+  border: 1px solid #d9534f;
+  color: #d9534f;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background-color: #fbe9e7;
+}

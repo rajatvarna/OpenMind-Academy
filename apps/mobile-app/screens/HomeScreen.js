@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 
 // Placeholder data - in a real app, this would be fetched from the Content Service API
 const COURSES = [
@@ -9,6 +10,8 @@ const COURSES = [
 ];
 
 const HomeScreen = ({ navigation }) => {
+  const { user, stats } = useAuth();
+
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.card}
@@ -21,6 +24,10 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>Welcome, {user.name}</Text>
+        <Text style={styles.scoreText}>⭐ {stats.score} Points</Text>
+      </View>
       <FlatList
         data={COURSES}
         renderItem={renderItem}
@@ -35,6 +42,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    padding: 20,
+    paddingBottom: 10,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  headerText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  scoreText: {
+    fontSize: 16,
+    color: '#555',
+    marginTop: 4,
   },
   listContainer: {
     padding: 16,

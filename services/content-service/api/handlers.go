@@ -106,7 +106,7 @@ func (a *API) CreateReviewHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, review)
 }
 
-// GetReviewsHandler handles fetching all reviews for a specific course.
+// GetReviewsHandler handles fetching a paginated list of reviews for a specific course.
 func (a *API) GetReviewsHandler(c *gin.Context) {
 	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)
 	if err != nil {
@@ -114,13 +114,27 @@ func (a *API) GetReviewsHandler(c *gin.Context) {
 		return
 	}
 
-	reviews, err := a.ContentStore.GetReviewsForCourse(c.Request.Context(), courseID)
+	cursor, _ := strconv.ParseInt(c.Query("cursor"), 10, 64)
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit <= 0 {
+		limit = 5 // Default limit for reviews
+	}
+
+	reviews, err := a.ContentStore.GetReviewsForCourse(c.Request.Context(), courseID, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get reviews for course"})
 		return
 	}
 
-	c.JSON(http.StatusOK, reviews)
+	var nextCursor int64 = 0
+	if len(reviews) > 0 {
+		nextCursor = reviews[len(reviews)-1].ID
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":       reviews,
+		"next_cursor": nextCursor,
+	})
 }
 
 // GetFeaturedCoursesHandler handles fetching all featured courses.
@@ -131,6 +145,48 @@ func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, courses)
+}
+
+// DeleteCourseHandler handles deleting a course.
+func (a *API) DeleteCourseHandler(c *gin.Context) {
+	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	err = a.store.DeleteCourse(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// GetAllCoursesHandler handles fetching a paginated list of all courses.
+func (a *API) GetAllCoursesHandler(c *gin.Context) {
+	cursor, _ := strconv.ParseInt(c.Query("cursor"), 10, 64) // Defaults to 0 if not present
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit <= 0 {
+		limit = 10 // Default limit
+	}
+
+	courses, err := a.ContentStore.GetAllCourses(c.Request.Context(), cursor, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get courses"})
+		return
+	}
+
+	var nextCursor int64 = 0
+	if len(courses) > 0 {
+		nextCursor = courses[len(courses)-1].ID
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":       courses,
+		"next_cursor": nextCursor,
+	})
 }
 
 // UpdateTranscriptHandler handles updating the transcript URL for a lesson.
@@ -156,4 +212,21 @@ func (a *API) UpdateTranscriptHandler(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// GetCoursesForUserHandler handles fetching all courses for a specific user.
+func (a *API) GetCoursesForUserHandler(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	courses, err := a.store.GetCoursesForUser(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get courses for user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, courses)
 }

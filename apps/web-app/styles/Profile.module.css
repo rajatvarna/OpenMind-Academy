@@ -1,0 +1,36 @@
+.profileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.statCard {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  text-align: center;
+}
+
+.statCard h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: #555;
+}
+
+.statCard p {
+  margin-bottom: 0;
+  font-size: 2.5rem;
+  font-weight: bold;
+}
+
+.coursesSection {
+  margin-top: 3rem;
+}
+
+.coursesSection h2 {
+  border-bottom: 1px solid #eaeaea;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}

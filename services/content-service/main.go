@@ -43,9 +43,11 @@ func main() {
 	// Note: In a real scenario, POST/PUT/DELETE endpoints would be protected by an auth middleware.
 	v1 := router.Group("/api/v1")
 	{
+		v1.GET("/courses", apiHandler.GetAllCoursesHandler)
 		v1.GET("/courses/featured", apiHandler.GetFeaturedCoursesHandler)
 		v1.POST("/courses", apiHandler.CreateCourseHandler)
 		v1.GET("/courses/:courseId", apiHandler.GetCourseHandler)
+		v1.DELETE("/courses/:courseId", apiHandler.DeleteCourseHandler) // New route
 		v1.POST("/lessons", apiHandler.CreateLessonHandler)
 
 		// Review routes
@@ -54,6 +56,9 @@ func main() {
 
 		// Transcript route
 		v1.PATCH("/lessons/:lessonId/transcript", apiHandler.UpdateTranscriptHandler)
+
+		// User-specific routes
+		v1.GET("/users/:userId/courses", apiHandler.GetCoursesForUserHandler)
 	}
 
 	// --- Start Server ---

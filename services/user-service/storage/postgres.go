@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
+    role VARCHAR(50) NOT NULL DEFAULT 'user', -- 'user', 'moderator', 'admin'
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -51,7 +52,7 @@ func (s *UserStore) CreateUser(ctx context.Context, userReq *model.RegistrationR
 	query := `
 		INSERT INTO users (email, password_hash, first_name, last_name)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, email, first_name, last_name, created_at, updated_at
+		RETURNING id, email, first_name, last_name, role, created_at, updated_at
 	`
 
 	var newUser model.User
@@ -60,6 +61,7 @@ func (s *UserStore) CreateUser(ctx context.Context, userReq *model.RegistrationR
 		&newUser.Email,
 		&newUser.FirstName,
 		&newUser.LastName,
+		&newUser.Role,
 		&newUser.CreatedAt,
 		&newUser.UpdatedAt,
 	)
@@ -75,7 +77,7 @@ func (s *UserStore) CreateUser(ctx context.Context, userReq *model.RegistrationR
 // GetUserByEmail retrieves a user by their email address.
 func (s *UserStore) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, first_name, last_name, created_at, updated_at
+		SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at
 		FROM users WHERE email = $1
 	`
 	var user model.User
@@ -85,6 +87,7 @@ func (s *UserStore) GetUserByEmail(ctx context.Context, email string) (*model.Us
 		&user.PasswordHash,
 		&user.FirstName,
 		&user.LastName,
+		&user.Role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)

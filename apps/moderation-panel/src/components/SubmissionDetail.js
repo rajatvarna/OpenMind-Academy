@@ -20,6 +20,15 @@ function SubmissionDetail({ submission }) {
     alert(`Submission ${submission.id} rejected!`);
   };
 
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to permanently delete submission ${submission.id}? This cannot be undone.`)) {
+      console.log(`Deleting submission ${submission.id}`);
+      // In a real app, you would make an API call here:
+      // fetch(`/api/content/courses/${submission.id}`, { method: 'DELETE' });
+      alert(`Submission ${submission.id} deleted!`);
+    }
+  };
+
   return (
     <div className="submission-detail">
       <h2>{submission.title}</h2>
@@ -52,6 +61,9 @@ function SubmissionDetail({ submission }) {
       <div className="actions">
         <button className="approve-btn" onClick={handleApprove}>Approve</button>
         <button className="reject-btn" onClick={handleReject}>Reject</button>
+      </div>
+      <div className="actions destructive">
+        <button className="delete-btn" onClick={handleDelete}>Delete Content Permanently</button>
       </div>
     </div>
   );

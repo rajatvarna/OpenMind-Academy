@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 
 // Placeholder lesson data
 const LESSONS = {
@@ -11,12 +12,24 @@ const LESSONS = {
 const CourseScreen = ({ route }) => {
   const { courseId, courseTitle } = route.params;
   const [lessons, setLessons] = useState([]);
+  const { completedLessons } = useAuth();
 
   useEffect(() => {
     // In a real app, you would fetch lessons for the courseId from your API
     // For now, we'll use our placeholder data
     setLessons(LESSONS[courseId] || []);
   }, [courseId]);
+
+  const renderLesson = ({ item }) => {
+    const isCompleted = completedLessons.has(parseInt(item.id.replace('l', '')));
+    return (
+      <View style={[styles.lessonItem, isCompleted && styles.completedLesson]}>
+        <Text style={isCompleted && styles.completedText}>
+          {isCompleted ? '✔' : '○'} {item.title}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -29,11 +42,7 @@ const CourseScreen = ({ route }) => {
       <FlatList
         data={lessons}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.lessonItem}>
-            <Text>{item.title}</Text>
-          </View>
-        )}
+        renderItem={renderLesson}
       />
     </View>
   );
@@ -65,6 +74,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 6,
   },
+  completedLesson: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#a5d6a7',
+    borderWidth: 1,
+  },
+  completedText: {
+    color: '#388e3c',
+    textDecorationLine: 'line-through',
+  }
 });
 
 export default CourseScreen;

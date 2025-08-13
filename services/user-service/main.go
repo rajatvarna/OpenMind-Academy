@@ -50,13 +50,16 @@ func main() {
 
 		// Authenticated routes
 		authorized := v1.Group("/")
-		authorized.Use(AuthMiddleware())
+		authorized.Use(AuthMiddleware("any")) // Accessible to any authenticated user
 		{
-			authorized.GET("/profile", getProfileHandler) // Placeholder, but now protected
+			authorized.GET("/profile", getProfileHandler)
 
 			// Progress tracking routes
 			authorized.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
 			authorized.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
+
+			// Full profile route
+			authorized.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
 		}
 	}
 
@@ -71,8 +74,8 @@ func main() {
 	}
 }
 
-// AuthMiddleware validates the JWT token from the Authorization header.
-func AuthMiddleware() gin.HandlerFunc {
+// AuthMiddleware creates a middleware that validates a JWT and checks for a required role.
+func AuthMiddleware(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -93,8 +96,16 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Set user ID in context for downstream handlers to use
+		// Check if the user has the required role.
+		// A more complex system could support multiple roles, e.g., "admin" can do anything a "moderator" can.
+		if claims.Role != requiredRole && requiredRole != "any" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+			return
+		}
+
+		// Set user info in context for downstream handlers to use
 		c.Set("userID", claims.UserID)
+		c.Set("userRole", claims.Role)
 
 		c.Next()
 	}

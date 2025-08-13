@@ -110,6 +110,39 @@ func (s *ContentStore) GetFeaturedCourses(ctx context.Context) ([]model.Course, 
 	return courses, nil
 }
 
+// DeleteCourse deletes a course and all its associated content (lessons, reviews) via cascading deletes.
+func (s *ContentStore) DeleteCourse(ctx context.Context, courseID int64) error {
+	query := `DELETE FROM courses WHERE id = $1`
+	_, err := s.db.Exec(ctx, query, courseID)
+	return err
+}
+
+// GetAllCourses retrieves a paginated list of all courses.
+func (s *ContentStore) GetAllCourses(ctx context.Context, cursor int64, limit int) ([]model.Course, error) {
+	query := `
+		SELECT id, title, description, author_id, is_featured, created_at, updated_at
+		FROM courses
+		WHERE id > $1
+		ORDER BY id ASC
+		LIMIT $2
+	`
+	rows, err := s.db.Query(ctx, query, cursor, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var courses []model.Course
+	for rows.Next() {
+		var c model.Course
+		if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.AuthorID, &c.IsFeatured, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		courses = append(courses, c)
+	}
+	return courses, nil
+}
+
 // CreateLesson creates a new lesson in the database.
 func (s *ContentStore) CreateLesson(ctx context.Context, lesson *model.CreateLessonRequest) (*model.Lesson, error) {
 	query := `
@@ -175,15 +208,16 @@ func (s *ContentStore) CreateReview(ctx context.Context, req *model.CreateReview
 	return &newReview, err
 }
 
-// GetReviewsForCourse retrieves all reviews for a given course.
-func (s *ContentStore) GetReviewsForCourse(ctx context.Context, courseID int64) ([]model.Review, error) {
+// GetReviewsForCourse retrieves a paginated list of reviews for a given course.
+func (s *ContentStore) GetReviewsForCourse(ctx context.Context, courseID int64, cursor int64, limit int) ([]model.Review, error) {
 	query := `
 		SELECT id, course_id, user_id, rating, review, created_at
 		FROM course_reviews
-		WHERE course_id = $1
-		ORDER BY created_at DESC
+		WHERE course_id = $1 AND id > $2
+		ORDER BY id ASC
+		LIMIT $3
 	`
-	rows, err := s.db.Query(ctx, query, courseID)
+	rows, err := s.db.Query(ctx, query, courseID, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -205,4 +239,23 @@ func (s *ContentStore) UpdateLessonTranscript(ctx context.Context, lessonID int6
 	query := `UPDATE lessons SET transcript_url = $1, updated_at = NOW() WHERE id = $2`
 	_, err := s.db.Exec(ctx, query, transcriptURL, lessonID)
 	return err
+}
+
+// GetCoursesForUser retrieves all courses created by a specific user.
+func (s *ContentStore) GetCoursesForUser(ctx context.Context, userID int64) ([]model.Course, error) {
+	rows, err := s.db.Query(ctx, "SELECT id, title, description, author_id, is_featured, created_at, updated_at FROM courses WHERE author_id = $1 ORDER BY created_at DESC", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var courses []model.Course
+	for rows.Next() {
+		var c model.Course
+		if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.AuthorID, &c.IsFeatured, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		courses = append(courses, c)
+	}
+	return courses, nil
 }
