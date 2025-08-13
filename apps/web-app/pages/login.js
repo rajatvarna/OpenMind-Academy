@@ -2,28 +2,39 @@ import { useState } from 'react';
 import Head from 'next/head';
 import styles from '../styles/Login.module.css';
 
+import { useState } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+import styles from '../styles/Login.module.css';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Logging in with:', { email, password });
+    setError(''); // Reset error state
 
-    // In a real application, you would make an API call here:
-    // const res = await fetch('/api/login', { // This might be a Next.js API route proxying to your user service
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ email, password }),
-    // });
-    // if (res.ok) {
-    //   const { token } = await res.json();
-    //   // Store the token (e.g., in cookies) and redirect
-    //   console.log('Login successful, token:', token);
-    // } else {
-    //   console.error('Login failed');
-    // }
-    alert('Login functionality is not yet implemented. Check the console for details.');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        // Login was successful, the cookie is set by the API route.
+        // Redirect to the homepage.
+        router.push('/');
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to login.');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    }
   };
 
   return (
@@ -56,6 +67,7 @@ export default function LoginPage() {
             />
           </div>
           <button type="submit" className={styles.button}>Login</button>
+          {error && <p className={styles.error}>{error}</p>}
         </form>
       </main>
     </div>

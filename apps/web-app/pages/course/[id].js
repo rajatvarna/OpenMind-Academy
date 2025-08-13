@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import styles from '../../styles/CoursePage.module.css';
+import ChatInterface from '../../components/ChatInterface';
 
 export default function CoursePage({ course, lessons }) {
   const router = useRouter();
@@ -32,6 +33,11 @@ export default function CoursePage({ course, lessons }) {
             ))}
           </ul>
         </div>
+
+        <div className={styles.qnaSection}>
+          <h2>Ask a Question</h2>
+          <ChatInterface />
+        </div>
       </main>
     </div>
   );
@@ -39,36 +45,46 @@ export default function CoursePage({ course, lessons }) {
 
 // This function tells Next.js which dynamic paths to pre-render.
 export async function getStaticPaths() {
-  // In a real app, you'd fetch all course IDs from the Content Service.
-  const allCourseIds = [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }];
+  try {
+    const res = await fetch('http://api-gateway:8080/api/content/courses');
+    const courses = await res.json();
 
-  const paths = allCourseIds.map((course) => ({
-    params: { id: course.id.toString() },
-  }));
+    const paths = courses.map((course) => ({
+      params: { id: course.id.toString() },
+    }));
 
-  // { fallback: true } means other routes should be generated on-demand.
-  return { paths, fallback: true };
+    return { paths, fallback: 'blocking' };
+  } catch (error) {
+    console.error('Failed to fetch paths for courses:', error);
+    return { paths: [], fallback: 'blocking' };
+  }
 }
 
 // This function fetches the data for a single course at build time.
 export async function getStaticProps({ params }) {
-  // params contains the course `id`.
-  // In a real app, you would fetch course and lesson data from your API.
-  // const courseRes = await fetch(`http://content-service:3001/api/v1/courses/${params.id}`);
-  // const courseData = await courseRes.json();
+  try {
+    // Fetch course details and lessons from the API gateway
+    const res = await fetch(`http://api-gateway:8080/api/content/courses/${params.id}`);
 
-  const placeholderCourse = { id: params.id, title: `Course ${params.id}`, description: `This is the description for course ${params.id}.` };
-  const placeholderLessons = [
-    { id: 1, course_id: params.id, position: 1, title: 'Welcome to the Course' },
-    { id: 2, course_id: params.id, position: 2, title: 'Core Concepts' },
-    { id: 3, course_id: params.id, position: 3, title: 'Advanced Topics' },
-  ];
+    if (!res.ok) {
+      // If the response is not ok (e.g., 404), we want to show a 404 page.
+      return { notFound: true };
+    }
 
-  return {
-    props: {
-      course: placeholderCourse,
-      lessons: placeholderLessons,
-    },
-    revalidate: 60,
-  };
+    // Assuming the API returns an object like { course: {...}, lessons: [...] }
+    const { course, lessons } = await res.json();
+
+    return {
+      props: {
+        course,
+        lessons,
+      },
+      // Re-generate the page at most once every 60 seconds
+      revalidate: 60,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch data for course ${params.id}:`, error);
+    // In case of an error (e.g., network issue), we can also show a 404 page.
+    return { notFound: true };
+  }
 }

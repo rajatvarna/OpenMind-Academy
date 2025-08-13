@@ -31,23 +31,29 @@ export default function Home({ courses }) {
 
 // This function runs at build time on the server.
 export async function getStaticProps() {
-  // In a real application, you would fetch this data from your Content Service API.
-  // const res = await fetch('http://content-service:3001/api/v1/courses');
-  // const courses = await res.json();
+  let courses = [];
+  try {
+    // Fetch data from the API gateway, which routes to the Content Service.
+    // In a real K8s setup, this would be the internal service name.
+    // For local dev, it might be http://localhost:8080/api/content/courses
+    const res = await fetch('http://api-gateway:8080/api/content/courses');
 
-  // For now, we'll use placeholder data.
-  const courses = [
-    { id: 1, title: 'Introduction to Python', description: 'Learn the basics of Python programming from scratch.' },
-    { id: 2, title: 'Web Development Fundamentals', description: 'Understand HTML, CSS, and JavaScript, the building blocks of the web.' },
-    { id: 3, title: 'The Science of Well-Being', description: 'A course on the science behind happiness and productivity.' },
-    { id: 4, title: 'Graphic Design for Beginners', description: 'Learn the core principles of graphic design.' },
-  ];
+    if (res.ok) {
+      courses = await res.json();
+    } else {
+      // Log an error to the server-side console
+      console.error('Failed to fetch courses:', res.status, res.statusText);
+    }
+  } catch (error) {
+    console.error('An error occurred while fetching courses:', error);
+  }
 
+  // The page will be rendered with the fetched courses, or an empty array if the fetch failed.
   return {
     props: {
       courses,
     },
-    // Optional: revalidate the data every 60 seconds
+    // Re-generate the page at most once every 60 seconds
     revalidate: 60,
   };
 }

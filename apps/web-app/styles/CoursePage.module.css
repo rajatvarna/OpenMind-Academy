@@ -29,3 +29,15 @@
   background-color: #fff;
   font-size: 1.2rem;
 }
+
+.qnaSection {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid #eaeaea;
+}
+
+.qnaSection h2 {
+  font-size: 2rem;
+  text-align: center;
+  margin-bottom: 2rem;
+}
