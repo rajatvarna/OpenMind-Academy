@@ -59,3 +59,21 @@ type CreateReviewRequest struct {
 	Rating   int    `json:"rating" binding:"required,min=1,max=5"`
 	Review   string `json:"review"`
 }
+
+// --- Learning Path Structs ---
+
+// LearningPath defines the structure for a learning path.
+type LearningPath struct {
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Courses     []Course  `json:"courses,omitempty"` // Populated on retrieval
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// CreateLearningPathRequest defines the payload for creating a new learning path.
+type CreateLearningPathRequest struct {
+	Title       string  `json:"title" binding:"required"`
+	Description string  `json:"description"`
+	CourseIDs   []int64 `json:"course_ids" binding:"required"` // Ordered list of course IDs
+}

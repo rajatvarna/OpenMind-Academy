@@ -1,0 +1,53 @@
+.pathTitle {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.pathDescription {
+  font-size: 1.25rem;
+  text-align: center;
+  color: #555;
+  margin-bottom: 4rem;
+}
+
+.courseList {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.courseItem {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 2rem;
+}
+
+.stepNumber {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #ccc;
+  margin-right: 2rem;
+}
+
+.courseInfo {
+  flex: 1;
+}
+
+.courseTitle {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #0070f3;
+  text-decoration: none;
+}
+
+.courseTitle:hover {
+  text-decoration: underline;
+}
+
+.courseDescription {
+  margin-top: 0.5rem;
+  color: #333;
+}

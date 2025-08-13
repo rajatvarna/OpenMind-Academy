@@ -147,6 +147,36 @@ func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, courses)
 }
 
+// --- Learning Path Handlers ---
+
+func (a *API) CreateLearningPathHandler(c *gin.Context) {
+	var req model.CreateLearningPathRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	path, err := a.store.CreateLearningPath(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create learning path"})
+		return
+	}
+	c.JSON(http.StatusCreated, path)
+}
+
+func (a *API) GetLearningPathHandler(c *gin.Context) {
+	pathID, err := strconv.ParseInt(c.Param("pathId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid path ID"})
+		return
+	}
+	path, err := a.store.GetLearningPathByID(c.Request.Context(), pathID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Learning path not found"})
+		return
+	}
+	c.JSON(http.StatusOK, path)
+}
+
 // DeleteCourseHandler handles deleting a course.
 func (a *API) DeleteCourseHandler(c *gin.Context) {
 	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)

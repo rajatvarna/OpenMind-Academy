@@ -43,6 +43,20 @@ CREATE TABLE IF NOT EXISTS course_reviews (
     UNIQUE (course_id, user_id) -- A user can only review a course once
 );
 
+CREATE TABLE IF NOT EXISTS learning_paths (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS learning_path_courses (
+    path_id BIGINT NOT NULL REFERENCES learning_paths(id) ON DELETE CASCADE,
+    course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    step INTEGER NOT NULL,
+    PRIMARY KEY (path_id, course_id)
+);
+
 */
 
 // ContentStore handles database operations for content.
@@ -115,6 +129,84 @@ func (s *ContentStore) DeleteCourse(ctx context.Context, courseID int64) error {
 	query := `DELETE FROM courses WHERE id = $1`
 	_, err := s.db.Exec(ctx, query, courseID)
 	return err
+}
+
+// --- Learning Path Storage Functions ---
+
+// CreateLearningPath creates a new learning path and associates courses with it in a transaction.
+func (s *ContentStore) CreateLearningPath(ctx context.Context, req *model.CreateLearningPathRequest) (*model.LearningPath, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) // Rollback on error
+
+	// 1. Create the learning_paths entry
+	var newPath model.LearningPath
+	pathQuery := `INSERT INTO learning_paths (title, description) VALUES ($1, $2) RETURNING id, title, description, created_at`
+	err = tx.QueryRow(ctx, pathQuery, req.Title, req.Description).Scan(
+		&newPath.ID, &newPath.Title, &newPath.Description, &newPath.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Create the learning_path_courses entries
+	for i, courseID := range req.CourseIDs {
+		step := i + 1
+		assocQuery := `INSERT INTO learning_path_courses (path_id, course_id, step) VALUES ($1, $2, $3)`
+		_, err := tx.Exec(ctx, assocQuery, newPath.ID, courseID, step)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &newPath, nil
+}
+
+// GetLearningPathByID retrieves a learning path and its associated courses.
+func (s *ContentStore) GetLearningPathByID(ctx context.Context, pathID int64) (*model.LearningPath, error) {
+	// This would be a more complex query with a JOIN to get all data at once.
+	// For simplicity, we'll do it in two steps.
+
+	// 1. Get path details
+	var path model.LearningPath
+	pathQuery := `SELECT id, title, description, created_at FROM learning_paths WHERE id = $1`
+	err := s.db.QueryRow(ctx, pathQuery, pathID).Scan(&path.ID, &path.Title, &path.Description, &path.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Get associated courses
+	courseQuery := `
+		SELECT c.id, c.title, c.description, c.author_id, c.is_featured, c.created_at, c.updated_at
+		FROM courses c
+		JOIN learning_path_courses lpc ON c.id = lpc.course_id
+		WHERE lpc.path_id = $1
+		ORDER BY lpc.step ASC
+	`
+	rows, err := s.db.Query(ctx, courseQuery, pathID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var courses []model.Course
+	for rows.Next() {
+		var c model.Course
+		if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.AuthorID, &c.IsFeatured, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		courses = append(courses, c)
+	}
+	path.Courses = courses
+
+	return &path, nil
 }
 
 // GetAllCourses retrieves a paginated list of all courses.

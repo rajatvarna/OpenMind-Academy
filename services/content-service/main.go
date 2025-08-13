@@ -59,6 +59,10 @@ func main() {
 
 		// User-specific routes
 		v1.GET("/users/:userId/courses", apiHandler.GetCoursesForUserHandler)
+
+		// Learning Path routes
+		v1.POST("/paths", apiHandler.CreateLearningPathHandler)
+		v1.GET("/paths/:pathId", apiHandler.GetLearningPathHandler)
 	}
 
 	// --- Start Server ---
