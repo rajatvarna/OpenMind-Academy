@@ -43,6 +43,7 @@ func main() {
 	// Note: In a real scenario, POST/PUT/DELETE endpoints would be protected by an auth middleware.
 	v1 := router.Group("/api/v1")
 	{
+		v1.GET("/courses/featured", apiHandler.GetFeaturedCoursesHandler)
 		v1.POST("/courses", apiHandler.CreateCourseHandler)
 		v1.GET("/courses/:courseId", apiHandler.GetCourseHandler)
 		v1.POST("/lessons", apiHandler.CreateLessonHandler)

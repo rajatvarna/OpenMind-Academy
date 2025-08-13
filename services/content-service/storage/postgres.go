@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS courses (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     author_id BIGINT NOT NULL, -- This would be a foreign key in a real setup, but for microservices, we just store the ID.
+    is_featured BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -59,7 +60,7 @@ func (s *ContentStore) CreateCourse(ctx context.Context, course *model.CreateCou
 	query := `
 		INSERT INTO courses (title, description, author_id)
 		VALUES ($1, $2, $3)
-		RETURNING id, title, description, author_id, created_at, updated_at
+		RETURNING id, title, description, author_id, is_featured, created_at, updated_at
 	`
 	var newCourse model.Course
 	err := s.db.QueryRow(ctx, query, course.Title, course.Description, authorID).Scan(
@@ -67,6 +68,7 @@ func (s *ContentStore) CreateCourse(ctx context.Context, course *model.CreateCou
 		&newCourse.Title,
 		&newCourse.Description,
 		&newCourse.AuthorID,
+		&newCourse.IsFeatured,
 		&newCourse.CreatedAt,
 		&newCourse.UpdatedAt,
 	)
@@ -75,17 +77,37 @@ func (s *ContentStore) CreateCourse(ctx context.Context, course *model.CreateCou
 
 // GetCourse retrieves a single course by its ID.
 func (s *ContentStore) GetCourse(ctx context.Context, courseID int64) (*model.Course, error) {
-	query := `SELECT id, title, description, author_id, created_at, updated_at FROM courses WHERE id = $1`
+	query := `SELECT id, title, description, author_id, is_featured, created_at, updated_at FROM courses WHERE id = $1`
 	var course model.Course
 	err := s.db.QueryRow(ctx, query, courseID).Scan(
 		&course.ID,
 		&course.Title,
 		&course.Description,
 		&course.AuthorID,
+		&course.IsFeatured,
 		&course.CreatedAt,
 		&course.UpdatedAt,
 	)
 	return &course, err
+}
+
+// GetFeaturedCourses retrieves a list of all featured courses.
+func (s *ContentStore) GetFeaturedCourses(ctx context.Context) ([]model.Course, error) {
+	rows, err := s.db.Query(ctx, "SELECT id, title, description, author_id, is_featured, created_at, updated_at FROM courses WHERE is_featured = TRUE ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var courses []model.Course
+	for rows.Next() {
+		var c model.Course
+		if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.AuthorID, &c.IsFeatured, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		courses = append(courses, c)
+	}
+	return courses, nil
 }
 
 // CreateLesson creates a new lesson in the database.

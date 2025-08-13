@@ -2,7 +2,7 @@ import Head from 'next/head';
 import CourseCard from '../components/CourseCard';
 import styles from '../styles/Home.module.css';
 
-export default function Home({ courses }) {
+export default function Home({ courses, featuredCourses }) {
   return (
     <div className="container">
       <Head>
@@ -19,6 +19,18 @@ export default function Home({ courses }) {
           Explore our community-generated courses on any topic imaginable.
         </p>
 
+        {featuredCourses && featuredCourses.length > 0 && (
+          <div className={styles.featuredSection}>
+            <h2>Featured Courses</h2>
+            <div className={styles.grid}>
+              {featuredCourses.map((course) => (
+                <CourseCard key={course.id} course={course} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <h2 className={styles.allCoursesTitle}>All Courses</h2>
         <div className={styles.grid}>
           {courses.map((course) => (
             <CourseCard key={course.id} course={course} />
@@ -31,27 +43,22 @@ export default function Home({ courses }) {
 
 // This function runs at build time on the server.
 export async function getStaticProps() {
-  let courses = [];
-  try {
-    // Fetch data from the API gateway, which routes to the Content Service.
-    // In a real K8s setup, this would be the internal service name.
-    // For local dev, it might be http://localhost:8080/api/content/courses
-    const res = await fetch('http://api-gateway:8080/api/content/courses');
+  // Use a full URL for server-side fetching
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-    if (res.ok) {
-      courses = await res.json();
-    } else {
-      // Log an error to the server-side console
-      console.error('Failed to fetch courses:', res.status, res.statusText);
-    }
-  } catch (error) {
-    console.error('An error occurred while fetching courses:', error);
-  }
+  // Fetch all courses and featured courses in parallel
+  const [coursesRes, featuredRes] = await Promise.all([
+    fetch(`${baseUrl}/api/courses`),
+    fetch(`${baseUrl}/api/courses/featured`)
+  ]);
 
-  // The page will be rendered with the fetched courses, or an empty array if the fetch failed.
+  const courses = coursesRes.ok ? await coursesRes.json() : [];
+  const featuredCourses = featuredRes.ok ? await featuredRes.json() : [];
+
   return {
     props: {
       courses,
+      featuredCourses,
     },
     // Re-generate the page at most once every 60 seconds
     revalidate: 60,

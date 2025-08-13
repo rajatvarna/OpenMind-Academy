@@ -123,6 +123,16 @@ func (a *API) GetReviewsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, reviews)
 }
 
+// GetFeaturedCoursesHandler handles fetching all featured courses.
+func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
+	courses, err := a.store.GetFeaturedCourses(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get featured courses"})
+		return
+	}
+	c.JSON(http.StatusOK, courses)
+}
+
 // UpdateTranscriptHandler handles updating the transcript URL for a lesson.
 func (a *API) UpdateTranscriptHandler(c *gin.Context) {
 	lessonID, err := strconv.ParseInt(c.Param("lessonId"), 10, 64)

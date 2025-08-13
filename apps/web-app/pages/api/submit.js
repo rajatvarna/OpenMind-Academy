@@ -12,7 +12,9 @@ export default async function handler(req, res) {
   if (!token) {
     return res.status(401).json({ message: 'Not authenticated. Please log in.' });
   }
-  // In a real app, you'd also verify the token is valid.
+
+  // The allowlist check has been removed for public launch.
+  // All authenticated users can now submit content.
 
   // 2. Get data from the request body
   const { lessonId, textContent, title } = req.body;

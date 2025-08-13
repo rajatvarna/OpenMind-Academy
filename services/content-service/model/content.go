@@ -8,6 +8,7 @@ type Course struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	AuthorID    int64     `json:"author_id"` // Foreign key to the User service's users table
+	IsFeatured  bool      `json:"is_featured,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
