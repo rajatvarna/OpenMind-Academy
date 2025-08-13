@@ -2,50 +2,30 @@ import { useState } from 'react';
 import Modal from './Modal';
 import styles from '../styles/DonationModal.module.css';
 
-import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
-
-const CheckoutForm = () => {
-  const stripe = useStripe();
-  const elements = useElements();
+// This is a placeholder for the Stripe Elements wrapper
+const CheckoutForm = ({ clientSecret }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [message, setMessage] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!stripe || !elements) {
-      // Stripe.js has not yet loaded.
-      // Make sure to disable form submission until Stripe.js has loaded.
-      return;
-    }
-
     setIsProcessing(true);
-
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        // Make sure to change this to your payment completion page
-        return_url: `${window.location.origin}/`,
-      },
-    });
-
-    if (error.type === "card_error" || error.type === "validation_error") {
-      setMessage(error.message);
-    } else {
-      setMessage("An unexpected error occurred.");
-    }
-
-    setIsProcessing(false);
+    // In a real app, you would use stripe.confirmPayment here
+    console.log("Simulating payment confirmation with client secret:", clientSecret);
+    setTimeout(() => {
+      alert("Thank you for your donation!");
+      setIsProcessing(false);
+    }, 2000);
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      <PaymentElement />
-      <button disabled={isProcessing || !stripe || !elements} className={styles.submitButton}>
+      <div className={styles.placeholderCard}>
+        <p>This is where the secure Stripe Card Element would be.</p>
+        <span>**** **** **** 4242</span>
+      </div>
+      <button disabled={isProcessing} className={styles.submitButton}>
         {isProcessing ? "Processing..." : "Donate"}
       </button>
-      {/* Show any error or success messages */}
-      {message && <div id="payment-message">{message}</div>}
     </form>
   );
 };
@@ -92,9 +72,8 @@ export default function DonationModal({ show, onClose }) {
           </button>
         </form>
       ) : (
-        <Elements options={{ clientSecret }}>
-          <CheckoutForm />
-        </Elements>
+        // In a real app, you would wrap CheckoutForm with <Elements stripe={stripePromise} options={{ clientSecret }}>
+        <CheckoutForm clientSecret={clientSecret} />
       )}
     </Modal>
   );
