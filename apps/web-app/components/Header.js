@@ -3,16 +3,13 @@ import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Header.module.css';
 import SearchBar from './SearchBar';
-import DonationModal from './DonationModal';
 import { useState } from 'react';
 
 const Header = () => {
   const { user, stats, logout, loading } = useAuth();
-  const [showDonationModal, setShowDonationModal] = useState(false);
 
   return (
     <>
-      <DonationModal show={showDonationModal} onClose={() => setShowDonationModal(false)} />
       <header className={styles.header}>
       <div className={styles.container}>
         <Link href="/" legacyBehavior>
@@ -58,9 +55,6 @@ const Header = () => {
                 </Link>
               </li>
             )}
-            <li>
-              <button onClick={() => setShowDonationModal(true)} className={styles.supportButton}>Support Us</button>
-            </li>
           </ul>
         </nav>
       </div>
