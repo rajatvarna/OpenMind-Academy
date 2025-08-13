@@ -46,6 +46,13 @@ func main() {
 		v1.POST("/courses", apiHandler.CreateCourseHandler)
 		v1.GET("/courses/:courseId", apiHandler.GetCourseHandler)
 		v1.POST("/lessons", apiHandler.CreateLessonHandler)
+
+		// Review routes
+		v1.POST("/reviews", apiHandler.CreateReviewHandler)
+		v1.GET("/courses/:courseId/reviews", apiHandler.GetReviewsHandler)
+
+		// Transcript route
+		v1.PATCH("/lessons/:lessonId/transcript", apiHandler.UpdateTranscriptHandler)
 	}
 
 	// --- Start Server ---

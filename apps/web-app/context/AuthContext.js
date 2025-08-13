@@ -5,22 +5,30 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [stats, setStats] = useState({ score: 0 });
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Check if the user is authenticated on initial load
     const checkUser = async () => {
       try {
-        const res = await fetch('/api/me');
-        if (res.ok) {
-          const { user } = await res.json();
+        const userRes = await fetch('/api/me');
+        if (userRes.ok) {
+          const { user } = await userRes.json();
           setUser(user);
+          // If user exists, fetch their stats
+          const statsRes = await fetch(`/api/stats/${user.id}`);
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            setStats(statsData);
+          }
         } else {
           setUser(null);
+          setStats({ score: 0 });
         }
       } catch (error) {
         setUser(null);
+        setStats({ score: 0 });
       } finally {
         setLoading(false);
       }
@@ -40,7 +48,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout }}>
+    <AuthContext.Provider value={{ user, stats, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

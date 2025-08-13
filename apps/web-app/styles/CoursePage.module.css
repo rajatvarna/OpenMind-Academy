@@ -1,6 +1,54 @@
+.titleWrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
 .courseTitle {
   font-size: 3rem;
+  margin: 0;
+}
+
+.reportButton {
+  background-color: #fbe9e7;
+  color: #d9534f;
+  border: 1px solid #ffccbc;
+  border-radius: 5px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.lessonActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.transcriptButton {
+  background-color: #f3e5f5;
+  color: #8e24aa;
+  border: 1px solid #e1bee7;
+  border-radius: 5px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.transcriptBox {
+  background-color: #fafafa;
+  border: 1px solid #eee;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 1.5rem;
+  margin-top: -1rem;
   margin-bottom: 1rem;
+}
+
+.transcriptBox p {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .courseDescription {
@@ -9,11 +57,28 @@
   margin-bottom: 3rem;
 }
 
-.lessonList h2 {
-  font-size: 2rem;
+.lessonHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 1px solid #eaeaea;
   padding-bottom: 1rem;
   margin-bottom: 1rem;
+}
+
+.lessonList h2 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.quizButton {
+  background-color: #e3f2fd;
+  color: #1e88e5;
+  border: 1px solid #bbdefb;
+  border-radius: 5px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
 
 .lessonList ul {
@@ -22,12 +87,40 @@
 }
 
 .lessonItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 1rem;
   border: 1px solid #ddd;
   border-radius: 8px;
   margin-bottom: 1rem;
   background-color: #fff;
   font-size: 1.2rem;
+  transition: background-color 0.3s;
+}
+
+.lessonItem.completed {
+  background-color: #e8f5e9; /* A light green */
+  border-color: #a5d6a7;
+}
+
+.lessonItem.completed span {
+  text-decoration: line-through;
+  color: #555;
+}
+
+.completeButton {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.completeButton:hover {
+  background-color: #1976d2;
 }
 
 .qnaSection {
@@ -37,6 +130,30 @@
 }
 
 .qnaSection h2 {
+  font-size: 2rem;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.discussionSection {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid #eaeaea;
+}
+
+.discussionSection h2 {
+  font-size: 2rem;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.reviewsSection {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid #eaeaea;
+}
+
+.reviewsSection h2 {
   font-size: 2rem;
   text-align: center;
   margin-bottom: 2rem;

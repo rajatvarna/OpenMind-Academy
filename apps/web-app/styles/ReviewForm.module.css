@@ -1,0 +1,62 @@
+.reviewForm {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 8px;
+}
+
+.reviewForm h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.reviewForm .starRating {
+  margin-bottom: 1rem;
+}
+
+.reviewForm .starRating button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 2rem;
+  padding: 0;
+  margin-right: 0.25rem;
+}
+
+.reviewForm .starRating button .star {
+  transition: color 0.2s;
+}
+
+.reviewForm .starRating .off {
+  color: #ccc;
+}
+
+.reviewForm .starRating .on {
+  color: #f5c518;
+}
+
+.reviewForm textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+  margin-bottom: 1rem;
+}
+
+.reviewForm button[type="submit"] {
+  padding: 0.75rem 1.5rem;
+  background-color: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.reviewForm .error {
+  color: #d9534f;
+  margin-top: 1rem;
+}

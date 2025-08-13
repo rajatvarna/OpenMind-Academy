@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Header.module.css';
 
 const Header = () => {
-  const { user, logout, loading } = useAuth();
+  const { user, stats, logout, loading } = useAuth();
 
   return (
     <header className={styles.header}>
@@ -19,9 +19,16 @@ const Header = () => {
                 <a>Courses</a>
               </Link>
             </li>
+            <li>
+              <Link href="/leaderboard" legacyBehavior>
+                <a>Leaderboard</a>
+              </Link>
+            </li>
             {loading ? null : user ? (
               <>
-                <li className={styles.userName}>Hello, {user.name}</li>
+                <li className={styles.userName}>
+                  Hello, {user.name} (⭐ {stats.score || 0})
+                </li>
                 <li>
                   <button onClick={logout} className={styles.logoutButton}>Logout</button>
                 </li>

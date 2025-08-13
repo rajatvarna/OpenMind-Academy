@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 
-from rag_logic import chunk_text, get_embedding, vector_store, ask_llm
+from rag_logic import chunk_text, get_embedding, vector_store, ask_llm, generate_quiz
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
@@ -27,7 +27,22 @@ class QueryResponse(BaseModel):
     answer: str
     context: list[str]
 
+class QuizRequest(BaseModel):
+    text_content: str
+
 # --- API Endpoints ---
+
+@app.post("/generate-quiz")
+async def generate_quiz_endpoint(request: QuizRequest):
+    """
+    Endpoint to generate a quiz from a block of text.
+    """
+    try:
+        quiz = generate_quiz(request.text_content)
+        return quiz
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to generate quiz.")
+
 
 @app.post("/index", response_model=IndexResponse)
 async def index_document(request: IndexRequest):

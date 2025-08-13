@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/free-education/gamification-service/storage"
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/streadway/amqp"
 )
@@ -105,6 +107,38 @@ func main() {
 		}()
 
 		log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+
+		// Start the API server in a goroutine
+		go startApiServer(eventHandler.store)
+
 		<-forever
+	}
+}
+
+func startApiServer(store *storage.GamificationStore) {
+	router := gin.Default()
+	apiHandler := NewAPI(store)
+
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	v1 := router.Group("/api/v1")
+	{
+		// In a real app, this would be protected by an auth middleware
+		v1.GET("/users/:userId/stats", apiHandler.GetStatsHandler)
+
+		// Leaderboard is public
+		v1.GET("/leaderboard", apiHandler.GetLeaderboardHandler)
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3005" // Port for the gamification service API
+	}
+
+	log.Printf("Starting API server on port %s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Failed to run API server: %v", err)
 	}
 }

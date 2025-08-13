@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_lesson_progress (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lesson_id BIGINT NOT NULL, -- In a monolith, this would be a foreign key to lessons.
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, lesson_id)
+);
+
 */
 
 // UserStore handles database operations for users.
@@ -95,4 +102,37 @@ func (s *UserStore) GetUserByEmail(ctx context.Context, email string) (*model.Us
 func CheckPassword(hashedPassword, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	return err == nil
+}
+
+// MarkLessonAsComplete marks a lesson as completed for a user.
+// It uses an 'ON CONFLICT DO NOTHING' clause to handle cases where the entry already exists.
+func (s *UserStore) MarkLessonAsComplete(ctx context.Context, userID int64, lessonID int64) error {
+	query := `
+		INSERT INTO user_lesson_progress (user_id, lesson_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, lesson_id) DO NOTHING
+	`
+	_, err := s.db.Exec(ctx, query, userID, lessonID)
+	return err
+}
+
+// GetCompletedLessonsForUser retrieves a list of completed lesson IDs for a user.
+func (s *UserStore) GetCompletedLessonsForUser(ctx context.Context, userID int64) ([]int64, error) {
+	query := `SELECT lesson_id FROM user_lesson_progress WHERE user_id = $1`
+	rows, err := s.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var completedLessonIDs []int64
+	for rows.Next() {
+		var lessonID int64
+		if err := rows.Scan(&lessonID); err != nil {
+			return nil, err
+		}
+		completedLessonIDs = append(completedLessonIDs, lessonID)
+	}
+
+	return completedLessonIDs, nil
 }

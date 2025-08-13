@@ -53,6 +53,10 @@ func main() {
 		authorized.Use(AuthMiddleware())
 		{
 			authorized.GET("/profile", getProfileHandler) // Placeholder, but now protected
+
+			// Progress tracking routes
+			authorized.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
+			authorized.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
 		}
 	}
 

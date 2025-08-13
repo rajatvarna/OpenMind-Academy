@@ -87,3 +87,63 @@ func (a *API) CreateLessonHandler(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, lesson)
 }
+
+// CreateReviewHandler handles submitting a new review for a course.
+func (a *API) CreateReviewHandler(c *gin.Context) {
+	var req model.CreateReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+	// In a real app, req.UserID would be populated from the JWT claims, not the request body.
+
+	review, err := a.ContentStore.CreateReview(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit review"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, review)
+}
+
+// GetReviewsHandler handles fetching all reviews for a specific course.
+func (a *API) GetReviewsHandler(c *gin.Context) {
+	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	reviews, err := a.ContentStore.GetReviewsForCourse(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get reviews for course"})
+		return
+	}
+
+	c.JSON(http.StatusOK, reviews)
+}
+
+// UpdateTranscriptHandler handles updating the transcript URL for a lesson.
+func (a *API) UpdateTranscriptHandler(c *gin.Context) {
+	lessonID, err := strconv.ParseInt(c.Param("lessonId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lesson ID"})
+		return
+	}
+
+	var req struct {
+		TranscriptURL string `json:"transcript_url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = a.store.UpdateLessonTranscript(c.Request.Context(), lessonID, req.TranscriptURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update transcript URL"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

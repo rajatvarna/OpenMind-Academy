@@ -1,0 +1,42 @@
+.discussionContainer {
+  margin-top: 1rem;
+}
+
+.newThread {
+  margin-bottom: 2rem;
+  text-align: right;
+}
+
+.newThread button {
+  padding: 0.75rem 1.5rem;
+  background-color: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.threadList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.threadItem {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+}
+
+.threadTitle {
+  font-weight: bold;
+  font-size: 1.2rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.threadMeta {
+  font-size: 0.9rem;
+  color: #666;
+}

@@ -1,0 +1,35 @@
+.reviewsContainer {
+  margin-top: 2rem;
+}
+
+.reviewCard {
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.reviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.starRating span {
+  color: #ccc;
+  font-size: 1.2rem;
+}
+
+.starRating span.filled {
+  color: #f5c518;
+}
+
+.reviewCard p {
+  margin: 0.5rem 0;
+}
+
+.reviewCard small {
+  color: #777;
+}

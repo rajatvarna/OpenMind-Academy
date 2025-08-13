@@ -46,10 +46,14 @@ def handle_video_request(message_body):
             video_urls[resolution] = gcs_url
             print(f"[{lesson_id}] Uploaded {resolution} to {gcs_url}")
 
-        # 4. Update the Content Service
-        # We'll assume the main video URL is the original one for now.
+        # 4. Generate transcript
+        transcript_path = generate_transcript(lesson_id, original_video_path)
+        transcript_gcs_url = upload_to_gcs(lesson_id, transcript_path, "transcript")
+        print(f"[{lesson_id}] Uploaded transcript to {transcript_gcs_url}")
+
+        # 5. Update the Content Service with all URLs
         main_video_url = video_urls.get("original")
-        update_content_service(lesson_id, main_video_url)
+        update_content_service(lesson_id, main_video_url, transcript_gcs_url)
         print(f"[{lesson_id}] Successfully updated content service for lesson.")
 
     except Exception as e:
@@ -119,15 +123,38 @@ def upload_to_gcs(lesson_id, local_path, resolution):
     return blob.public_url
 
 
-def update_content_service(lesson_id, video_url):
-    """Updates the lesson in the Content Service with the new video URL."""
-    url = f"{CONTENT_SERVICE_URL}/lessons/{lesson_id}/video" # Assuming this endpoint exists
-    payload = {"video_url": video_url}
+def update_content_service(lesson_id, video_url, transcript_url):
+    """Updates the lesson in the Content Service with the new URLs."""
+    # This would be better as a single PATCH request, but for simplicity we'll do two.
+    # A real implementation might have a single endpoint to update multiple fields.
 
-    print(f"[{lesson_id}] Updating content service at {url} with payload: {payload}")
+    # 1. Update video URL
+    video_update_url = f"{CONTENT_SERVICE_URL}/lessons/{lesson_id}/video" # This endpoint doesn't exist yet, just an example
+    video_payload = {"video_url": video_url}
+    print(f"[{lesson_id}] Updating video url at {video_update_url} with payload: {video_payload}")
+    # requests.patch(video_update_url, json=video_payload).raise_for_status()
+
+    # 2. Update transcript URL
+    transcript_update_url = f"{CONTENT_SERVICE_URL}/lessons/{lesson_id}/transcript"
+    transcript_payload = {"transcript_url": transcript_url}
+    print(f"[{lesson_id}] Updating transcript url at {transcript_update_url} with payload: {transcript_payload}")
     # response = requests.patch(url, json=payload)
     # response.raise_for_status() # Raise an exception for non-2xx status codes
     # print(f"[{lesson_id}] Content service updated successfully with status: {response.status_code}")
 
     # Simulate success
     return True
+
+def generate_transcript(lesson_id, video_path):
+    """Placeholder for a speech-to-text API call."""
+    print(f"[{lesson_id}] Starting transcription for video: {video_path}")
+    time.sleep(10) // Simulate long transcription job
+
+    # Create a dummy transcript file
+    transcript_file_path = os.path.join(TRANSCODE_PATH, f"{lesson_id}_transcript.txt")
+    with open(transcript_file_path, "w") as f:
+        f.write(f"This is the simulated transcript for lesson {lesson_id}.\n")
+        f.write("It would contain the full text from the video audio.")
+
+    print(f"[{lesson_id}] Transcription complete. File at: {transcript_file_path}")
+    return transcript_file_path

@@ -78,6 +78,30 @@ app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
+app.post('/api/v1/report', async (req, res) => {
+    const { contentId, reason, userId } = req.body;
+    if (!contentId || !reason || !userId) {
+        return res.status(400).json({ error: 'contentId, reason, and userId are required.' });
+    }
+
+    // In a real application, you would save this report to a database.
+    console.log(`Received report for content ${contentId} from user ${userId}. Reason: ${reason}`);
+
+    // You might also send a notification to a moderator channel.
+
+    res.status(202).json({ status: 'accepted', message: 'Report received. Thank you for your feedback.' });
+});
+
+app.get('/api/v1/reports', async (req, res) => {
+    // This endpoint would fetch all pending reports from the database for the moderation panel.
+    const placeholderReports = [
+        { reportId: 1, contentId: 101, reason: 'Inaccurate information.', userId: 45 },
+        { reportId: 2, contentId: 102, reason: 'Copyright violation.', userId: 88 },
+    ];
+
+    res.status(200).json(placeholderReports);
+});
+
 // --- Server Startup ---
 app.listen(PORT, () => {
     console.log(`UGC Submission Service listening on port ${PORT}`);

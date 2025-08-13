@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import ModerationQueue from './components/ModerationQueue';
 import SubmissionDetail from './components/SubmissionDetail';
+import ReportsQueue from './components/ReportsQueue';
 
 function App() {
   // This state will hold the submission currently being viewed by the moderator.
@@ -20,6 +21,7 @@ function App() {
       <main className="App-main">
         <div className="queue-panel">
           <ModerationQueue onSelectSubmission={handleSelectSubmission} />
+          <ReportsQueue />
         </div>
         <div className="detail-panel">
           {selectedSubmission ? (

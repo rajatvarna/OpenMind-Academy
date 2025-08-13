@@ -24,10 +24,22 @@ CREATE TABLE IF NOT EXISTS lessons (
     title VARCHAR(255) NOT NULL,
     text_content TEXT,
     video_url VARCHAR(255),
+    transcript_url VARCHAR(255),
     course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS course_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL, -- Would be a FK to users table
+    rating SMALLINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (course_id, user_id) -- A user can only review a course once
 );
 
 */
@@ -120,4 +132,55 @@ func (s *ContentStore) GetLessonsByCourse(ctx context.Context, courseID int64) (
 		lessons = append(lessons, lesson)
 	}
 	return lessons, nil
+}
+
+// CreateReview adds a new course review to the database.
+func (s *ContentStore) CreateReview(ctx context.Context, req *model.CreateReviewRequest) (*model.Review, error) {
+	query := `
+		INSERT INTO course_reviews (course_id, user_id, rating, review)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, course_id, user_id, rating, review, created_at
+	`
+	var newReview model.Review
+	err := s.db.QueryRow(ctx, query, req.CourseID, req.UserID, req.Rating, req.Review).Scan(
+		&newReview.ID,
+		&newReview.CourseID,
+		&newReview.UserID,
+		&newReview.Rating,
+		&newReview.Review,
+		&newReview.CreatedAt,
+	)
+	return &newReview, err
+}
+
+// GetReviewsForCourse retrieves all reviews for a given course.
+func (s *ContentStore) GetReviewsForCourse(ctx context.Context, courseID int64) ([]model.Review, error) {
+	query := `
+		SELECT id, course_id, user_id, rating, review, created_at
+		FROM course_reviews
+		WHERE course_id = $1
+		ORDER BY created_at DESC
+	`
+	rows, err := s.db.Query(ctx, query, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviews []model.Review
+	for rows.Next() {
+		var review model.Review
+		if err := rows.Scan(&review.ID, &review.CourseID, &review.UserID, &review.Rating, &review.Review, &review.CreatedAt); err != nil {
+			return nil, err
+		}
+		reviews = append(reviews, review)
+	}
+	return reviews, nil
+}
+
+// UpdateLessonTranscript updates the transcript_url for a specific lesson.
+func (s *ContentStore) UpdateLessonTranscript(ctx context.Context, lessonID int64, transcriptURL string) error {
+	query := `UPDATE lessons SET transcript_url = $1, updated_at = NOW() WHERE id = $2`
+	_, err := s.db.Exec(ctx, query, transcriptURL, lessonID)
+	return err
 }

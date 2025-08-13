@@ -1,0 +1,41 @@
+.reports-queue {
+  padding: 10px;
+}
+
+.reports-queue h2 {
+  font-size: 1.2em;
+  margin-top: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.reports-queue table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.reports-queue th,
+.reports-queue td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.reports-queue th {
+  background-color: #f2f2f2;
+}
+
+.reports-queue .action-btn {
+  margin-right: 5px;
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.reports-queue .action-btn-primary {
+  background-color: #d9534f;
+  color: white;
+  border-color: #d9534f;
+}

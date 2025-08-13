@@ -58,3 +58,9 @@ func (s *GamificationStore) GetTopUsers(ctx context.Context, count int64) ([]red
 	// ZRevRangeWithScores returns members from highest to lowest score.
 	return s.client.ZRevRangeWithScores(ctx, leaderboardKey, 0, count-1).Result()
 }
+
+// GetUserStats retrieves all stats for a given user.
+func (s *GamificationStore) GetUserStats(ctx context.Context, userID int64) (map[string]string, error) {
+	userKey := fmt.Sprintf("%s%d", userProfileKeyPrefix, userID)
+	return s.client.HGetAll(ctx, userKey).Result()
+}

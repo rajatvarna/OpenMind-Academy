@@ -88,3 +88,40 @@ def ask_llm(question, context):
 
 # Instantiate a global vector store for the service
 vector_store = VectorStore()
+
+def generate_quiz(text_content):
+    """
+    Placeholder for calling an LLM to generate a quiz from text.
+    """
+    print("Generating quiz from text...")
+
+    # In a real app, you would format a prompt asking the LLM to create
+    # a multiple-choice quiz based on the text_content.
+    prompt = f"""
+    Based on the following text, generate a 3-question multiple-choice quiz.
+    Return the quiz as a JSON object with a "questions" array.
+    Each question should have a "question", an "options" array, and a "correctAnswer" index.
+
+    Text:
+    ---
+    {text_content[:1000]}...
+    ---
+    """
+
+    time.sleep(3) # Simulate API call latency
+
+    # Return a hardcoded placeholder quiz
+    return {
+        "questions": [
+            {
+                "question": "This is a sample question based on the text. What is the main topic?",
+                "options": ["Option A", "Option B", "The Main Topic", "Option D"],
+                "correctAnswer": 2,
+            },
+            {
+                "question": "This is another sample question. True or False?",
+                "options": ["True", "False"],
+                "correctAnswer": 0,
+            }
+        ]
+    }

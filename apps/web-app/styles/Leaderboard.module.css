@@ -1,0 +1,47 @@
+.title {
+  text-align: center;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+.leaderboard {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.header, .row {
+  display: grid;
+  grid-template-columns: 1fr 3fr 1fr;
+  padding: 1rem;
+  align-items: center;
+}
+
+.header {
+  font-weight: bold;
+  background-color: #f1f0f0;
+  border-bottom: 1px solid #ddd;
+}
+
+.row {
+  border-bottom: 1px solid #eee;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rank {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.score {
+  text-align: right;
+  font-weight: bold;
+  color: #0070f3;
+}

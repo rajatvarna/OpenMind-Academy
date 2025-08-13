@@ -14,11 +14,12 @@ type Course struct {
 
 // Lesson represents a single educational unit within a course.
 type Lesson struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	TextContent string    `json:"text_content"`
-	VideoURL    string    `json:"video_url"` // URL to the video in GCS
-	CourseID    int64     `json:"course_id"` // Foreign key to the courses table
+	ID             int64     `json:"id"`
+	Title          string    `json:"title"`
+	TextContent    string    `json:"text_content"`
+	VideoURL       string    `json:"video_url"` // URL to the video in GCS
+	TranscriptURL  string    `json:"transcript_url,omitempty"` // URL to the transcript file
+	CourseID       int64     `json:"course_id"` // Foreign key to the courses table
 	Position    int       `json:"position"`  // For ordering lessons within a course
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -38,4 +39,22 @@ type CreateLessonRequest struct {
 	TextContent string `json:"text_content" binding:"required"`
 	CourseID    int64  `json:"course_id" binding:"required"`
 	Position    int    `json:"position"` // Optional, can be auto-managed
+}
+
+// Review represents a user's review and rating for a course.
+type Review struct {
+	ID        int64     `json:"id"`
+	CourseID  int64     `json:"course_id"`
+	UserID    int64     `json:"user_id"`
+	Rating    int       `json:"rating"`
+	Review    string    `json:"review"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// CreateReviewRequest defines the payload for creating a new review.
+type CreateReviewRequest struct {
+	CourseID int64  `json:"course_id" binding:"required"`
+	UserID   int64  `json:"user_id" binding:"required"` // In a real app, this would come from the JWT
+	Rating   int    `json:"rating" binding:"required,min=1,max=5"`
+	Review   string `json:"review"`
 }
