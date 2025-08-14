@@ -34,4 +34,11 @@ app.post('/create-payment-intent', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3007; // Port for the donation service
-app.listen(PORT, () => console.log(`Donation service running on port ${PORT}`));
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Donation service running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
