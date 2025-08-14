@@ -11,7 +11,8 @@ export default async function handler(req, res) {
 
   try {
     // Forward the request to the AI Q&A Service via the API Gateway
-    const qnaApiRes = await fetch('http://api-gateway:8080/api/qna/query', {
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const qnaApiRes = await fetch(`${gatewayUrl}/api/qna/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

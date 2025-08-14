@@ -10,7 +10,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const backendUrl = `http://api-gateway:8080/api/search/search?q=${encodeURIComponent(q)}`;
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const backendUrl = `${gatewayUrl}/api/search/search?q=${encodeURIComponent(q)}`;
     // Assuming search service is at /api/search on the gateway
 
     const apiRes = await fetch(backendUrl);

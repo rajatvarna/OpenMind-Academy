@@ -9,7 +9,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const backendUrl = 'http://api-gateway:8080/api/qna/generate-quiz';
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const backendUrl = `${gatewayUrl}/api/qna/generate-quiz`;
     const apiRes = await fetch(backendUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

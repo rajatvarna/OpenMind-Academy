@@ -12,8 +12,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
     // Forward the login request to the actual User Service via the API Gateway
-    const apiRes = await fetch('http://api-gateway:8080/api/users/login', {
+    const apiRes = await fetch(`${gatewayUrl}/api/users/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

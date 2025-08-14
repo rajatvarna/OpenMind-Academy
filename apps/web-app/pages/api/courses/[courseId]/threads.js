@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const backendUrl = `http://api-gateway:8080/api/forum/courses/${courseId}/threads`;
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const backendUrl = `${gatewayUrl}/api/forum/courses/${courseId}/threads`;
     // Assuming the forum service is mounted at /api/forum on the gateway
 
     const apiRes = await fetch(backendUrl);

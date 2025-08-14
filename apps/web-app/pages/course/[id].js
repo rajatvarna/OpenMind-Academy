@@ -204,7 +204,8 @@ export default function CoursePage({ course, lessons }) {
 // This function tells Next.js which dynamic paths to pre-render.
 export async function getStaticPaths() {
   try {
-    const res = await fetch('http://api-gateway:8080/api/content/courses');
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const res = await fetch(`${gatewayUrl}/api/content/courses`);
     const courses = await res.json();
 
     const paths = courses.map((course) => ({
@@ -222,7 +223,8 @@ export async function getStaticPaths() {
 export async function getStaticProps({ params }) {
   try {
     // Fetch course details and lessons from the API gateway
-    const res = await fetch(`http://api-gateway:8080/api/content/courses/${params.id}`);
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const res = await fetch(`${gatewayUrl}/api/content/courses/${params.id}`);
 
     if (!res.ok) {
       // If the response is not ok (e.g., 404), we want to show a 404 page.

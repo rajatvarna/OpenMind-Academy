@@ -25,7 +25,8 @@ export default async function handler(req, res) {
 
   try {
     // 3. Forward the request to the UGC Submission Service
-    const ugcApiRes = await fetch('http://api-gateway:8080/api/ugc/submit', {
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const ugcApiRes = await fetch(`${gatewayUrl}/api/ugc/submit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

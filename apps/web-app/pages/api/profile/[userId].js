@@ -11,7 +11,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const backendUrl = `http://api-gateway:8080/api/users/${userId}/full-profile`;
+      const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+      const backendUrl = `${gatewayUrl}/api/users/${userId}/full-profile`;
       const apiRes = await fetch(backendUrl, {
         headers: { 'Authorization': `Bearer ${token}` },
       });

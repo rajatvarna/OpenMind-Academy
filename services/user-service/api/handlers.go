@@ -81,17 +81,50 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, model.LoginResponse{Token: token})
 }
 
-// GetProgressHandler retrieves the list of completed lesson IDs for a user.
-func (a *API) GetProgressHandler(c *gin.Context) {
-	// In a real app, you'd get the userID from the JWT claims to ensure
-	// a user can only see their own progress.
-	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+// GetProfileHandler retrieves the profile for the currently authenticated user.
+func (a *API) GetProfileHandler(c *gin.Context) {
+	userIDHeader := c.GetHeader("X-User-Id")
+	if userIDHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
 		return
 	}
 
-	completed, err := a.UserStore.GetCompletedLessonsForUser(c.Request.Context(), userID)
+	id, err := strconv.ParseInt(userIDHeader, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
+		return
+	}
+
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), id)
+	if err != nil {
+		// This could be a "not found" error, which should be handled gracefully.
+		log.Printf("Error fetching profile for user %d: %v", id, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "User profile not found"})
+		return
+	}
+
+	// The User model already omits the password hash, so it's safe to return.
+	c.JSON(http.StatusOK, user)
+}
+
+// GetProgressHandler retrieves the list of completed lesson IDs for a user.
+func (a *API) GetProgressHandler(c *gin.Context) {
+	// The API gateway has already authenticated the user. We trust the headers.
+	// We should still validate that the requester has permission to view the progress for the given userId.
+	requesterID, _ := strconv.ParseInt(c.GetHeader("X-User-Id"), 10, 64)
+	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
+		return
+	}
+
+	// For now, only allow users to see their own progress.
+	if requesterID != targetUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only view your own progress."})
+		return
+	}
+
+	completed, err := a.UserStore.GetCompletedLessonsForUser(c.Request.Context(), targetUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user progress"})
 		return
@@ -102,10 +135,15 @@ func (a *API) GetProgressHandler(c *gin.Context) {
 
 // MarkLessonCompleteHandler marks a lesson as complete for a user.
 func (a *API) MarkLessonCompleteHandler(c *gin.Context) {
-	// Again, userID should come from the JWT.
-	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	requesterID, _ := strconv.ParseInt(c.GetHeader("X-User-Id"), 10, 64)
+	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
+		return
+	}
+
+	if requesterID != targetUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only mark lessons as complete for yourself."})
 		return
 	}
 
@@ -115,7 +153,7 @@ func (a *API) MarkLessonCompleteHandler(c *gin.Context) {
 		return
 	}
 
-	err = a.UserStore.MarkLessonAsComplete(c.Request.Context(), userID, req.LessonID)
+	err = a.UserStore.MarkLessonAsComplete(c.Request.Context(), targetUserID, req.LessonID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark lesson as complete"})
 		return

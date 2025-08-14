@@ -17,7 +17,8 @@ export default async function handler(req, res) {
 
   try {
     // 3. Forward to the Content Service
-    const apiRes = await fetch('http://api-gateway:8080/api/content/reviews', {
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const apiRes = await fetch(`${gatewayUrl}/api/content/reviews`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

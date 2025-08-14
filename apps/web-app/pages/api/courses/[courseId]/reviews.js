@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiRes = await fetch(`http://api-gateway:8080/api/content/courses/${courseId}/reviews`);
+    const backendUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const apiRes = await fetch(`${backendUrl}/api/content/courses/${courseId}/reviews`);
 
     if (!apiRes.ok) {
       const errorData = await apiRes.json();

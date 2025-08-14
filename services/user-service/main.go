@@ -5,10 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/free-education/user-service/api"
-	"github.com/free-education/user-service/auth"
 	"github.com/free-education/user-service/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -48,19 +46,11 @@ func main() {
 		v1.POST("/register", apiHandler.RegisterUserHandler)
 		v1.POST("/login", apiHandler.LoginUserHandler)
 
-		// Authenticated routes
-		authorized := v1.Group("/")
-		authorized.Use(AuthMiddleware("any")) // Accessible to any authenticated user
-		{
-			authorized.GET("/profile", getProfileHandler)
-
-			// Progress tracking routes
-			authorized.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
-			authorized.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
-
-			// Full profile route
-			authorized.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
-		}
+		// Authenticated routes are now protected by the API Gateway
+		v1.GET("/profile", apiHandler.GetProfileHandler)
+		v1.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
+		v1.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
+		v1.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
 	}
 
 	// --- Start Server ---
@@ -74,50 +64,4 @@ func main() {
 	}
 }
 
-// AuthMiddleware creates a middleware that validates a JWT and checks for a required role.
-func AuthMiddleware(requiredRole string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			return
-		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			return
-		}
-
-		tokenString := parts[1]
-		claims, err := auth.ValidateToken(tokenString)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
-			return
-		}
-
-		// Check if the user has the required role.
-		// A more complex system could support multiple roles, e.g., "admin" can do anything a "moderator" can.
-		if claims.Role != requiredRole && requiredRole != "any" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
-			return
-		}
-
-		// Set user info in context for downstream handlers to use
-		c.Set("userID", claims.UserID)
-		c.Set("userRole", claims.Role)
-
-		c.Next()
-	}
-}
-
-// getProfileHandler is a placeholder for a protected endpoint.
-func getProfileHandler(c *gin.Context) {
-	// We can retrieve the user ID from the context that the middleware set.
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found in context"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "This is a protected profile endpoint", "user_id": userID})
-}

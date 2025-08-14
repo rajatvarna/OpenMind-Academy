@@ -3,28 +3,24 @@ const app = require('./index');
 const stripe = require('stripe');
 
 jest.mock('stripe', () => {
-  const originalStripe = jest.requireActual('stripe');
-  return jest.fn((...args) => {
-    const stripeInstance = originalStripe(...args);
-    stripeInstance.paymentIntents = {
-      create: jest.fn().mockResolvedValue({ client_secret: 'test_secret' }),
-    };
-    return stripeInstance;
-  });
+  const mockCreate = jest.fn().mockResolvedValue({ client_secret: 'test_secret' });
+  return jest.fn().mockImplementation(() => ({
+    paymentIntents: {
+      create: mockCreate,
+    },
+  }));
 });
 
 describe('Donation Service API', () => {
-  let server;
-  beforeAll((done) => {
-    server = app.listen(0, done); // Listen on a random port
-  });
-
-  afterAll((done) => {
-    server.close(done);
+  beforeEach(() => {
+    const stripe = require('stripe');
+    stripe().paymentIntents.create.mockClear();
+    stripe().paymentIntents.create.mockResolvedValue({ client_secret: 'test_secret' });
   });
 
   describe('POST /create-payment-intent', () => {
     it('should create a payment intent and return a client secret', async () => {
+      const stripe = require('stripe');
       const response = await request(app)
         .post('/create-payment-intent')
         .send({ amount: 1000 });
@@ -59,6 +55,7 @@ describe('Donation Service API', () => {
     });
 
     it('should return a 500 error if Stripe fails', async () => {
+      const stripe = require('stripe');
       stripe().paymentIntents.create.mockRejectedValueOnce(new Error('Stripe error'));
 
       const response = await request(app)

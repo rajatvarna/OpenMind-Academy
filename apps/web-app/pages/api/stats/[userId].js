@@ -13,7 +13,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const backendUrl = `http://api-gateway:8080/api/gamification/users/${userId}/stats`;
+      const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+      const backendUrl = `${gatewayUrl}/api/gamification/users/${userId}/stats`;
       // Assuming the gamification service is mounted at /api/gamification on the gateway
 
       const apiRes = await fetch(backendUrl, {

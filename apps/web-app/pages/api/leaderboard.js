@@ -5,7 +5,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const backendUrl = 'http://api-gateway:8080/api/gamification/leaderboard';
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const backendUrl = `${gatewayUrl}/api/gamification/leaderboard`;
     const apiRes = await fetch(backendUrl);
 
     if (!apiRes.ok) {

@@ -9,7 +9,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const backendUrl = 'http://api-gateway:8080/api/donations/create-payment-intent';
+    const gatewayUrl = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
+    const backendUrl = `${gatewayUrl}/api/donations/create-payment-intent`;
     // Assuming donation service is at /api/donations on the gateway
 
     const apiRes = await fetch(backendUrl, {

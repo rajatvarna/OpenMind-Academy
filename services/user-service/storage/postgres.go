@@ -101,6 +101,33 @@ func (s *UserStore) GetUserByEmail(ctx context.Context, email string) (*model.Us
 	return &user, nil
 }
 
+// GetUserByID retrieves a user by their ID.
+// Note: This currently selects the password_hash. In a real-world scenario
+// you might have a separate function or a different model for public user profiles.
+func (s *UserStore) GetUserByID(ctx context.Context, userID int64) (*model.User, error) {
+	query := `
+		SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at
+		FROM users WHERE id = $1
+	`
+	var user model.User
+	err := s.db.QueryRow(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.FirstName,
+		&user.LastName,
+		&user.Role,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // CheckPassword compares a plaintext password with the stored hash.
 func CheckPassword(hashedPassword, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
