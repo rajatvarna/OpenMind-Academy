@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
 require('dotenv').config();
 
 // Initialize Express app
@@ -23,6 +24,8 @@ const publicRoutes = [
     '/health'
 ];
 
+const publicKey = fs.readFileSync('../secrets/jwtRS256.key.pub');
+
 const authMiddleware = (req, res, next) => {
     if (publicRoutes.some(path => req.path.startsWith(path))) {
         return next();
@@ -35,7 +38,7 @@ const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
         req.user = decoded; // Attach decoded user info to the request
         next();
     } catch (err) {

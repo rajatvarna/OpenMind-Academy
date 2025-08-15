@@ -1,21 +1,28 @@
 package auth
 
 import (
+	"crypto/rsa"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// jwtSecret is the secret key used to sign the JWTs.
-// In a real application, this should be a long, complex string loaded securely.
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+var (
+	signKey *rsa.PrivateKey
+)
 
 func init() {
-	if len(jwtSecret) == 0 {
-		fmt.Println("Warning: JWT_SECRET environment variable not set. Using default insecure key.")
-		jwtSecret = []byte("a-very-insecure-default-secret-key")
+	// In a real app, the path to the key should be configurable.
+	keyBytes, err := ioutil.ReadFile("../secrets/jwtRS256.key")
+	if err != nil {
+		panic(fmt.Sprintf("Error reading private key: %s", err))
+	}
+
+	signKey, err = jwt.ParseRSAPrivateKeyFromPEM(keyBytes)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing private key: %s", err))
 	}
 }
 
@@ -41,38 +48,14 @@ func GenerateToken(userID int64, role string) (string, error) {
 		},
 	}
 
-	// Create the token with the HS256 signing algorithm and the claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	// Create the token with the RS256 signing algorithm and the claims
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 
-	// Sign the token with our secret key
-	tokenString, err := token.SignedString(jwtSecret)
+	// Sign the token with the private key
+	tokenString, err := token.SignedString(signKey)
 	if err != nil {
 		return "", err
 	}
 
 	return tokenString, nil
-}
-
-// ValidateToken parses and validates a JWT string.
-// It returns the claims if the token is valid.
-func ValidateToken(tokenStr string) (*Claims, error) {
-	claims := &Claims{}
-
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-		// Check the signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return jwtSecret, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !token.Valid {
-		return nil, fmt.Errorf("token is not valid")
-	}
-
-	return claims, nil
 }
