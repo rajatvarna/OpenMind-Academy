@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 require('dotenv').config();
+const { roles, permissions } = require('./rbac_config');
 
 // Initialize Express app
 const app = express();
@@ -47,6 +48,51 @@ const authMiddleware = (req, res, next) => {
 };
 
 app.use(authMiddleware);
+
+// --- RBAC Middleware ---
+const rbacMiddleware = (req, res, next) => {
+    if (publicRoutes.some(path => req.path.startsWith(path))) {
+        return next();
+    }
+
+    const role = req.user ? req.user.role : roles.USER;
+    const userPermissions = permissions[role];
+
+    if (!userPermissions) {
+        return res.status(403).json({ error: 'Forbidden: Invalid role.' });
+    }
+
+    if (userPermissions.includes('*')) {
+        return next(); // Admins can do anything
+    }
+
+    const matchedPermission = userPermissions.find(p => {
+        const regex = new RegExp(`^${p.path.replace(/:\w+/g, '[^/]+')}$`);
+        return regex.test(req.path) && p.method === req.method;
+    });
+
+    if (matchedPermission) {
+        if (matchedPermission.own) {
+            const requesterId = req.user.user_id.toString();
+            const resourceMatch = req.path.match(/\/(api\/(users|gamification)\/([^\/]+))\//);
+            const resourceId = resourceMatch ? resourceMatch[3] : null;
+
+            if (requesterId === resourceId) {
+                return next();
+            }
+            // Allow moderators and admins to access "own" routes for any user
+            if (role === roles.MODERATOR || role === roles.ADMIN) {
+                return next();
+            }
+            return res.status(403).json({ error: 'Forbidden: You can only access your own resources.' });
+        }
+        return next();
+    }
+
+    return res.status(403).json({ error: 'Forbidden: You do not have permission to access this resource.' });
+};
+
+app.use(rbacMiddleware);
 
 // --- Service Routes ---
 

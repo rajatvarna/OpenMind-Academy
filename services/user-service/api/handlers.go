@@ -109,18 +109,10 @@ func (a *API) GetProfileHandler(c *gin.Context) {
 
 // GetProgressHandler retrieves the list of completed lesson IDs for a user.
 func (a *API) GetProgressHandler(c *gin.Context) {
-	// The API gateway has already authenticated the user. We trust the headers.
-	// We should still validate that the requester has permission to view the progress for the given userId.
-	requesterID, _ := strconv.ParseInt(c.GetHeader("X-User-Id"), 10, 64)
+	// Authorization is now handled by the API Gateway.
 	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
-		return
-	}
-
-	// For now, only allow users to see their own progress.
-	if requesterID != targetUserID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only view your own progress."})
 		return
 	}
 
@@ -135,15 +127,10 @@ func (a *API) GetProgressHandler(c *gin.Context) {
 
 // MarkLessonCompleteHandler marks a lesson as complete for a user.
 func (a *API) MarkLessonCompleteHandler(c *gin.Context) {
-	requesterID, _ := strconv.ParseInt(c.GetHeader("X-User-Id"), 10, 64)
+	// Authorization is now handled by the API Gateway.
 	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
-		return
-	}
-
-	if requesterID != targetUserID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only mark lessons as complete for yourself."})
 		return
 	}
 
