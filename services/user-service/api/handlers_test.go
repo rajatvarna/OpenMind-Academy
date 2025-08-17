@@ -106,7 +106,7 @@ func TestForgotPasswordHandler(t *testing.T) {
 	t.Run("Successful password reset request", func(t *testing.T) {
 		var userStore storage.UserStore = &MockUserStore{}
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker)
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -126,7 +126,7 @@ func TestForgotPasswordHandler(t *testing.T) {
 	t.Run("User not found", func(t *testing.T) {
 		var userStore storage.UserStore = &MockUserStore{}
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker)
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -151,7 +151,7 @@ func TestResetPasswordHandler(t *testing.T) {
 	t.Run("Successful password reset", func(t *testing.T) {
 		var userStore storage.UserStore = &MockUserStore{}
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker)
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -171,7 +171,7 @@ func TestResetPasswordHandler(t *testing.T) {
 	t.Run("Invalid token", func(t *testing.T) {
 		var userStore storage.UserStore = &MockUserStore{}
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker)
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

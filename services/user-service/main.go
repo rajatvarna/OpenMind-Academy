@@ -53,7 +53,23 @@ func main() {
 	}
 	defer messageBroker.Close()
 
-	apiHandler := api.NewAPI(userStore, messageBroker)
+	frontendBaseURL := os.Getenv("FRONTEND_BASE_URL")
+	if frontendBaseURL == "" {
+		frontendBaseURL = "http://localhost:3001"
+		log.Println("FRONTEND_BASE_URL not set, using default value.")
+	}
+	contentServiceURL := os.Getenv("CONTENT_SERVICE_URL")
+	if contentServiceURL == "" {
+		contentServiceURL = "http://content-service:3001/api/v1"
+		log.Println("CONTENT_SERVICE_URL not set, using default value.")
+	}
+	gamificationServiceURL := os.Getenv("GAMIFICATION_SERVICE_URL")
+	if gamificationServiceURL == "" {
+		gamificationServiceURL = "http://gamification-service:3005/api/v1"
+		log.Println("GAMIFICATION_SERVICE_URL not set, using default value.")
+	}
+
+	apiHandler := api.NewAPI(userStore, messageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL)
 
 	// --- Router Setup ---
 	router := gin.Default()
@@ -73,16 +89,20 @@ func main() {
 		v1.POST("/password/reset", apiHandler.ResetPasswordHandler)
 
 		// Authenticated routes are now protected by the API Gateway
-		v1.GET("/profile", apiHandler.GetProfileHandler)
-		v1.GET("/preferences", apiHandler.GetUserPreferencesHandler)
-		v1.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
-		v1.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
-		v1.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
-		v1.GET("/users/:userId/quiz-attempts", apiHandler.GetQuizAttemptsForUserHandler)
-		v1.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
+		authenticated := v1.Group("/")
+		authenticated.Use(api.AuthMiddleware())
+		{
+			authenticated.GET("/profile", apiHandler.GetProfileHandler)
+			authenticated.GET("/preferences", apiHandler.GetUserPreferencesHandler)
+			authenticated.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
+			authenticated.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
+			authenticated.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
+			authenticated.GET("/users/:userId/quiz-attempts", apiHandler.GetQuizAttemptsForUserHandler)
+			authenticated.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
 
-		// Authenticated routes - specific to the user
-		v1.POST("/quiz-attempts", apiHandler.CreateQuizAttemptHandler)
+			// Authenticated routes - specific to the user
+			authenticated.POST("/quiz-attempts", apiHandler.CreateQuizAttemptHandler)
+		}
 	}
 
 	// --- Start Server ---

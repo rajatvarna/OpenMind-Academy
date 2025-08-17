@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,12 +14,16 @@ import (
 	"github.com/free-education/user-service/model"
 	"github.com/free-education/user-service/storage"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgconn"
 )
 
 // API holds the dependencies for the API handlers, like the user store.
 type API struct {
-	UserStore      storage.UserStore
-	MessageBroker messaging.MessageBroker
+	UserStore             storage.UserStore
+	MessageBroker         messaging.MessageBroker
+	FrontendBaseURL       string
+	ContentServiceURL     string
+	GamificationServiceURL string
 }
 
 // MarkCompleteRequest defines the payload for marking a lesson as complete.
@@ -27,14 +32,20 @@ type MarkCompleteRequest struct {
 }
 
 // NewAPI creates a new API struct with its dependencies.
-func NewAPI(userStore storage.UserStore, messageBroker messaging.MessageBroker) *API {
+func NewAPI(userStore storage.UserStore, messageBroker messaging.MessageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL string) *API {
 	return &API{
-		UserStore:      userStore,
-		MessageBroker: messageBroker,
+		UserStore:             userStore,
+		MessageBroker:         messageBroker,
+		FrontendBaseURL:       frontendBaseURL,
+		ContentServiceURL:     contentServiceURL,
+		GamificationServiceURL: gamificationServiceURL,
 	}
 }
 
-// RegisterUserHandler handles the logic for user registration.
+// RegisterUserHandler handles new user registration.
+// It expects a JSON payload with the user's email, password, and name.
+// On success, it returns the newly created user object with a 201 status code.
+// If the email already exists, it returns a 409 Conflict error.
 func (a *API) RegisterUserHandler(c *gin.Context) {
 	var req model.RegistrationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -42,13 +53,15 @@ func (a *API) RegisterUserHandler(c *gin.Context) {
 		return
 	}
 
-	// In a real app, you'd add more validation here (e.g., check if email already exists)
-	// For simplicity, we rely on the database's UNIQUE constraint for now.
-
 	newUser, err := a.UserStore.CreateUser(c.Request.Context(), &req)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		// Check if the error is a PostgreSQL error and if it's a unique violation (code 23505).
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			c.JSON(http.StatusConflict, gin.H{"error": "An account with this email already exists."})
+			return
+		}
 		log.Printf("Error creating user: %v", err)
-		// This could be a duplicate email error, which is a client error.
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
@@ -56,7 +69,10 @@ func (a *API) RegisterUserHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, newUser)
 }
 
-// LoginUserHandler handles the logic for user login.
+// LoginUserHandler handles user authentication.
+// It expects an email and password, and upon successful validation,
+// returns a JWT token for use in subsequent authenticated requests.
+// Returns a 401 Unauthorized error for invalid credentials.
 func (a *API) LoginUserHandler(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -66,13 +82,13 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 
 	user, err := a.UserStore.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		// User not found
+		// User not found. Return a generic error to avoid revealing user existence.
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
 	if !storage.CheckPassword(user.PasswordHash, req.Password) {
-		// Incorrect password
+		// Incorrect password.
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
@@ -87,7 +103,10 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, model.LoginResponse{Token: token})
 }
 
-// ForgotPasswordHandler handles the logic for sending a password reset link.
+// ForgotPasswordHandler initiates the password reset process.
+// It generates a secure, single-use token, stores it, and publishes an event
+// for the notifications service to send an email with the reset link.
+// To prevent user enumeration, it always returns a 200 OK response.
 func (a *API) ForgotPasswordHandler(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
@@ -99,7 +118,7 @@ func (a *API) ForgotPasswordHandler(c *gin.Context) {
 
 	user, err := a.UserStore.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil || user == nil {
-		// Don't reveal if the user exists or not.
+		// Don't reveal if the user exists or not for security reasons.
 		c.JSON(http.StatusOK, gin.H{"message": "If a user with that email exists, a password reset link has been sent."})
 		return
 	}
@@ -118,10 +137,10 @@ func (a *API) ForgotPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	// In a real app, you would get the frontend URL from config.
-	resetLink := fmt.Sprintf("http://localhost:3001/reset-password?token=%s", token)
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", a.FrontendBaseURL, token)
 
-	// Publish event to RabbitMQ
+	// Publish an event to the message broker. The notifications service will consume this
+	// and send the actual email. This decouples the services.
 	payload := map[string]interface{}{
 		"email":     user.Email,
 		"name":      user.FirstName,
@@ -129,13 +148,16 @@ func (a *API) ForgotPasswordHandler(c *gin.Context) {
 	}
 	if err := a.MessageBroker.Publish(c.Request.Context(), "notifications_events", "password_reset_requested", payload); err != nil {
 		log.Printf("Error publishing password reset event: %v", err)
-		// Don't fail the whole request if the notification fails.
+		// We still return a success response to the user even if the notification fails.
+		// The operation should be idempotent and can be retried by the user.
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "If a user with that email exists, a password reset link has been sent."})
 }
 
-// ResetPasswordHandler handles the logic for resetting a user's password.
+// ResetPasswordHandler completes the password reset process.
+// It requires a valid, non-expired token and a new password.
+// Upon success, it updates the user's password and deletes the token to prevent reuse.
 func (a *API) ResetPasswordHandler(c *gin.Context) {
 	var req struct {
 		Token       string `json:"token" binding:"required"`
@@ -158,33 +180,23 @@ func (a *API) ResetPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	// Clean up the used token
+	// Clean up the used token to ensure it cannot be used again.
 	if err := a.UserStore.DeletePasswordResetToken(c.Request.Context(), req.Token); err != nil {
 		log.Printf("Error deleting password reset token: %v", err)
-		// Don't fail the request if cleanup fails, but log it.
+		// Don't fail the main request if cleanup fails, but log it as it's important.
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Password has been reset successfully."})
 }
 
 // GetProfileHandler retrieves the profile for the currently authenticated user.
+// The user ID is injected by the AuthMiddleware.
 func (a *API) GetProfileHandler(c *gin.Context) {
-	userIDHeader := c.GetHeader("X-User-Id")
-	if userIDHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
-		return
-	}
+	userID := c.MustGet("userID").(int64)
 
-	id, err := strconv.ParseInt(userIDHeader, 10, 64)
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
-		return
-	}
-
-	user, err := a.UserStore.GetUserByID(c.Request.Context(), id)
-	if err != nil {
-		// This could be a "not found" error, which should be handled gracefully.
-		log.Printf("Error fetching profile for user %d: %v", id, err)
+		log.Printf("Error fetching profile for user %d: %v", userID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "User profile not found"})
 		return
 	}
@@ -194,22 +206,13 @@ func (a *API) GetProfileHandler(c *gin.Context) {
 }
 
 // GetUserPreferencesHandler retrieves the preferences for the currently authenticated user.
+// The user ID is injected by the AuthMiddleware.
 func (a *API) GetUserPreferencesHandler(c *gin.Context) {
-	userIDHeader := c.GetHeader("X-User-Id")
-	if userIDHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
-		return
-	}
+	userID := c.MustGet("userID").(int64)
 
-	id, err := strconv.ParseInt(userIDHeader, 10, 64)
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
-		return
-	}
-
-	user, err := a.UserStore.GetUserByID(c.Request.Context(), id)
-	if err != nil {
-		log.Printf("Error fetching preferences for user %d: %v", id, err)
+		log.Printf("Error fetching preferences for user %d: %v", userID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -218,18 +221,10 @@ func (a *API) GetUserPreferencesHandler(c *gin.Context) {
 }
 
 // UpdateUserPreferencesHandler updates the preferences for the currently authenticated user.
+// The user ID is injected by the AuthMiddleware. It expects a JSON object
+// containing the preferences to be updated.
 func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
-	userIDHeader := c.GetHeader("X-User-Id")
-	if userIDHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
-		return
-	}
-
-	id, err := strconv.ParseInt(userIDHeader, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
-		return
-	}
+	userID := c.MustGet("userID").(int64)
 
 	var prefs map[string]interface{}
 	if err := c.ShouldBindJSON(&prefs); err != nil {
@@ -237,8 +232,8 @@ func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
 		return
 	}
 
-	if err := a.UserStore.UpdateUserPreferences(c.Request.Context(), id, prefs); err != nil {
-		log.Printf("Error updating preferences for user %d: %v", id, err)
+	if err := a.UserStore.UpdateUserPreferences(c.Request.Context(), userID, prefs); err != nil {
+		log.Printf("Error updating preferences for user %d: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
 		return
 	}
@@ -249,17 +244,9 @@ func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
 // --- Quiz Attempt Handlers ---
 
 // CreateQuizAttemptHandler handles saving a user's quiz attempt.
+// The user ID is injected by the AuthMiddleware.
 func (a *API) CreateQuizAttemptHandler(c *gin.Context) {
-	userIDHeader := c.GetHeader("X-User-Id")
-	if userIDHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
-		return
-	}
-	userID, err := strconv.ParseInt(userIDHeader, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
-		return
-	}
+	userID := c.MustGet("userID").(int64)
 
 	var req model.CreateQuizAttemptRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -277,10 +264,10 @@ func (a *API) CreateQuizAttemptHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, attempt)
 }
 
-// GetQuizAttemptsForUserHandler retrieves all quiz attempts for a user.
+// GetQuizAttemptsForUserHandler retrieves all quiz attempts for a specific user.
+// Authorization should be handled by the API Gateway to ensure only the user
+// themselves or an authorized role (e.g., admin) can access this.
 func (a *API) GetQuizAttemptsForUserHandler(c *gin.Context) {
-	// This endpoint can be accessed by the user themselves or by a moderator/admin.
-	// The API Gateway should have already authorized this request.
 	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
@@ -297,10 +284,9 @@ func (a *API) GetQuizAttemptsForUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, attempts)
 }
 
-
 // GetProgressHandler retrieves the list of completed lesson IDs for a user.
+// Authorization should be handled by the API Gateway.
 func (a *API) GetProgressHandler(c *gin.Context) {
-	// Authorization is now handled by the API Gateway.
 	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
@@ -317,8 +303,8 @@ func (a *API) GetProgressHandler(c *gin.Context) {
 }
 
 // MarkLessonCompleteHandler marks a lesson as complete for a user.
+// Authorization should be handled by the API Gateway.
 func (a *API) MarkLessonCompleteHandler(c *gin.Context) {
-	// Authorization is now handled by the API Gateway.
 	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
@@ -342,12 +328,6 @@ func (a *API) MarkLessonCompleteHandler(c *gin.Context) {
 
 // --- Full Profile Aggregation ---
 
-// Define service URLs. These should come from config/env vars.
-var (
-	contentServiceURL = "http://content-service:3001/api/v1"
-	gamificationServiceURL = "http://gamification-service:3005/api/v1"
-)
-
 // FullProfileResponse defines the aggregated data for a user profile.
 type FullProfileResponse struct {
 	User             *model.User       `json:"user"`
@@ -355,7 +335,12 @@ type FullProfileResponse struct {
 	CreatedCourses   []interface{}     `json:"created_courses"` // Using interface{} for simplicity
 }
 
-// GetFullProfileHandler fetches data from multiple services to build a user profile.
+// GetFullProfileHandler demonstrates the aggregator pattern. It fetches data from
+// multiple services to construct a complete user profile.
+// It concurrently calls the gamification and content services.
+// NOTE: This approach has trade-offs. While it simplifies the frontend, it creates
+// coupling between services and can be a performance bottleneck. In a real-world
+// scenario, other patterns like event-driven data replication might be preferable.
 func (a *API) GetFullProfileHandler(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
@@ -364,9 +349,12 @@ func (a *API) GetFullProfileHandler(c *gin.Context) {
 	}
 
 	// 1. Get base user data from our own DB
-	// In a real app, we'd have a GetUserByID function. We'll reuse GetUserByEmail as a stand-in.
-	// This part of the logic is flawed without a proper GetUserByID.
-	// For this demo, we'll skip fetching the base user and assume we have it.
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		log.Printf("Error getting user for full profile %d: %v", userID, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
 
 	// Create a channel to receive results from concurrent API calls
 	type apiResult struct {
@@ -378,39 +366,45 @@ func (a *API) GetFullProfileHandler(c *gin.Context) {
 
 	// 2. Fetch gamification stats concurrently
 	go func() {
-		resp, err := http.Get(fmt.Sprintf("%s/users/%d/stats", gamificationServiceURL, userID))
+		resp, err := http.Get(fmt.Sprintf("%s/users/%d/stats", a.GamificationServiceURL, userID))
 		if err != nil {
 			ch <- apiResult{err: err, from: "gamification"}
 			return
 		}
 		defer resp.Body.Close()
 		var stats map[string]string
-		json.NewDecoder(resp.Body).Decode(&stats)
+		if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+			ch <- apiResult{err: err, from: "gamification"}
+			return
+		}
 		ch <- apiResult{data: stats, from: "gamification"}
 	}()
 
 	// 3. Fetch user's created courses concurrently
 	go func() {
 		// This endpoint doesn't exist yet, we'd need to add it to the Content Service
-		resp, err := http.Get(fmt.Sprintf("%s/users/%d/courses", contentServiceURL, userID))
+		resp, err := http.Get(fmt.Sprintf("%s/users/%d/courses", a.ContentServiceURL, userID))
 		if err != nil {
 			ch <- apiResult{err: err, from: "content"}
 			return
 		}
 		defer resp.Body.Close()
 		var courses []interface{}
-		json.NewDecoder(resp.Body).Decode(&courses)
+		if err := json.NewDecoder(resp.Body).Decode(&courses); err != nil {
+			ch <- apiResult{err: err, from: "content"}
+			return
+		}
 		ch <- apiResult{data: courses, from: "content"}
 	}()
 
 	// 4. Aggregate results
-	response := FullProfileResponse{}
+	response := FullProfileResponse{User: user}
 	for i := 0; i < 2; i++ {
 		result := <-ch
 		if result.err != nil {
 			log.Printf("Error fetching from %s service: %v", result.from, result.err)
-			// Decide on error handling: fail the whole request or return partial data?
-			// For now, we'll continue and return partial data.
+			// For now, we'll continue and return partial data, but a more robust
+			// error handling strategy (e.g., circuit breaker) might be needed.
 			continue
 		}
 		switch result.from {
