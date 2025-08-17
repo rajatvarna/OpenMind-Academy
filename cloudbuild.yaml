@@ -1,0 +1,57 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/web-app:$COMMIT_SHA'
+  - './apps/web-app'
+  id: 'build-web-app'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/user-service:$COMMIT_SHA'
+  - './services/user-service'
+  id: 'build-user-service'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/web-app:$COMMIT_SHA']
+  id: 'push-web-app'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/api-gateway:$COMMIT_SHA'
+  - './services/api-gateway'
+  id: 'build-api-gateway'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/notifications-service:$COMMIT_SHA'
+  - './services/notifications-service'
+  id: 'build-notifications-service'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/user-service:$COMMIT_SHA']
+  id: 'push-user-service'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/api-gateway:$COMMIT_SHA']
+  id: 'push-api-gateway'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/notifications-service:$COMMIT_SHA']
+  id: 'push-notifications-service'
+
+images:
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/web-app:$COMMIT_SHA'
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/user-service:$COMMIT_SHA'
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/api-gateway:$COMMIT_SHA'
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/platform-images/notifications-service:$COMMIT_SHA'
+
+options:
+  machineType: 'e2-highcpu-8'

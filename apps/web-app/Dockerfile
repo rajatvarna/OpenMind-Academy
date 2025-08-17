@@ -25,11 +25,18 @@ WORKDIR /app
 # Set environment variables for production
 ENV NODE_ENV=production
 
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
 # Copy the standalone output from the builder stage.
 # This includes the minimal server, .next/static, and public assets.
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Switch to the non-root user
+USER nextjs
 
 # The Next.js standalone server runs on port 3000 by default
 EXPOSE 3000

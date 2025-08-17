@@ -25,14 +25,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /user-service .
 # Alpine is small and has a package manager if needed for debugging.
 FROM alpine:3.18
 
+# Create a non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Set the working directory
-WORKDIR /
+WORKDIR /home/appuser
 
 # Copy the compiled binary from the builder stage
-COPY --from=builder /user-service /user-service
+COPY --from=builder /user-service .
+
+# Chown the binary to the non-root user
+USER appuser
 
 # Expose the port the app runs on (as defined in main.go)
 EXPOSE 3000
 
 # This is the command that will be executed when the container starts
-ENTRYPOINT ["/user-service"]
+ENTRYPOINT ["./user-service"]
