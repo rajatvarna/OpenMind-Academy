@@ -353,14 +353,14 @@ func (s *ContentStore) GetLessonsByCourse(ctx context.Context, courseID int64) (
 }
 
 // CreateReview adds a new course review to the database.
-func (s *ContentStore) CreateReview(ctx context.Context, req *model.CreateReviewRequest) (*model.Review, error) {
+func (s *ContentStore) CreateReview(ctx context.Context, req *model.CreateReviewRequest, userID int64) (*model.Review, error) {
 	query := `
 		INSERT INTO course_reviews (course_id, user_id, rating, review)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, course_id, user_id, rating, review, created_at
 	`
 	var newReview model.Review
-	err := s.db.QueryRow(ctx, query, req.CourseID, req.UserID, req.Rating, req.Review).Scan(
+	err := s.db.QueryRow(ctx, query, req.CourseID, userID, req.Rating, req.Review).Scan(
 		&newReview.ID,
 		&newReview.CourseID,
 		&newReview.UserID,

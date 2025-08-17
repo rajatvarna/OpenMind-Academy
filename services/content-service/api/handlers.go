@@ -14,14 +14,16 @@ import (
 // API holds the dependencies for the API handlers.
 type API struct {
 	ContentStore *storage.ContentStore
+	QnAServiceURL string
 }
 
 // NewAPI creates a new API struct.
-func NewAPI(store *storage.ContentStore) *API {
-	return &API{ContentStore: store}
+func NewAPI(store *storage.ContentStore, qnaServiceURL string) *API {
+	return &API{ContentStore: store, QnAServiceURL: qnaServiceURL}
 }
 
 // CreateCourseHandler handles the creation of a new course.
+// The author ID is taken from the authenticated user's context.
 func (a *API) CreateCourseHandler(c *gin.Context) {
 	var req model.CreateCourseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -29,10 +31,7 @@ func (a *API) CreateCourseHandler(c *gin.Context) {
 		return
 	}
 
-	// In a real application, authorID would come from a JWT middleware.
-	// c.GetInt64("userID")
-	// For now, we'll use a placeholder or expect it in the request for testing.
-	authorID := int64(1) // Placeholder author ID
+	authorID := c.MustGet("userID").(int64)
 
 	course, err := a.ContentStore.CreateCourse(c.Request.Context(), &req, authorID)
 	if err != nil {
@@ -43,7 +42,8 @@ func (a *API) CreateCourseHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, course)
 }
 
-// GetCourseHandler handles retrieving a single course and its lessons.
+// GetCourseHandler handles retrieving a single course and its associated lessons.
+// This is a public endpoint.
 func (a *API) GetCourseHandler(c *gin.Context) {
 	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)
 	if err != nil {
@@ -53,7 +53,7 @@ func (a *API) GetCourseHandler(c *gin.Context) {
 
 	course, err := a.ContentStore.GetCourse(c.Request.Context(), courseID)
 	if err != nil {
-		// Could be sql.ErrNoRows
+		// This could be sql.ErrNoRows, which we treat as a 404.
 		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
 		return
 	}
@@ -71,6 +71,7 @@ func (a *API) GetCourseHandler(c *gin.Context) {
 }
 
 // CreateLessonHandler handles the creation of a new lesson.
+// It includes an authorization check to ensure the user is the course author.
 func (a *API) CreateLessonHandler(c *gin.Context) {
 	var req model.CreateLessonRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,8 +79,18 @@ func (a *API) CreateLessonHandler(c *gin.Context) {
 		return
 	}
 
-	// Here you would add validation to ensure the author of the lesson
-	// is the same as the author of the course.
+	userID := c.MustGet("userID").(int64)
+
+	// Authorization check: Ensure the user is the author of the course.
+	course, err := a.ContentStore.GetCourse(c.Request.Context(), req.CourseID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+	if course.AuthorID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to add a lesson to this course"})
+		return
+	}
 
 	lesson, err := a.ContentStore.CreateLesson(c.Request.Context(), &req)
 	if err != nil {
@@ -97,15 +108,31 @@ func (a *API) CreateReviewHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
 		return
 	}
-	// In a real app, req.UserID would be populated from the JWT claims, not the request body.
 
-	review, err := a.ContentStore.CreateReview(c.Request.Context(), &req)
+	userID := c.MustGet("userID").(int64)
+
+	review, err := a.ContentStore.CreateReview(c.Request.Context(), &req, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit review"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, review)
+}
+
+// getPaginationParams is a helper function to parse cursor and limit from query params.
+// It sets default values and enforces a maximum limit to prevent abuse.
+func getPaginationParams(c *gin.Context, defaultLimit int) (int64, int) {
+	cursor, _ := strconv.ParseInt(c.Query("cursor"), 10, 64)
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit <= 0 {
+		limit = defaultLimit
+	}
+	// Enforce a maximum limit to prevent clients from requesting too much data.
+	if limit > 100 {
+		limit = 100
+	}
+	return cursor, limit
 }
 
 // GetReviewsHandler handles fetching a paginated list of reviews for a specific course.
@@ -116,11 +143,7 @@ func (a *API) GetReviewsHandler(c *gin.Context) {
 		return
 	}
 
-	cursor, _ := strconv.ParseInt(c.Query("cursor"), 10, 64)
-	limit, err := strconv.Atoi(c.Query("limit"))
-	if err != nil || limit <= 0 {
-		limit = 5 // Default limit for reviews
-	}
+	cursor, limit := getPaginationParams(c, 5) // Default limit of 5 for reviews
 
 	reviews, err := a.ContentStore.GetReviewsForCourse(c.Request.Context(), courseID, cursor, limit)
 	if err != nil {
@@ -140,6 +163,7 @@ func (a *API) GetReviewsHandler(c *gin.Context) {
 }
 
 // GetFeaturedCoursesHandler handles fetching all featured courses.
+// This is a public endpoint.
 func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
 	courses, err := a.ContentStore.GetFeaturedCourses(c.Request.Context())
 	if err != nil {
@@ -151,12 +175,16 @@ func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
 
 // --- Learning Path Handlers ---
 
+// CreateLearningPathHandler handles the creation of a new learning path.
+// This is an authenticated endpoint.
 func (a *API) CreateLearningPathHandler(c *gin.Context) {
 	var req model.CreateLearningPathRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Note: In a real app, you might want to add an author_id to learning paths
+	// and perform an authorization check here.
 	path, err := a.ContentStore.CreateLearningPath(c.Request.Context(), &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create learning path"})
@@ -165,6 +193,8 @@ func (a *API) CreateLearningPathHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, path)
 }
 
+// GetLearningPathHandler retrieves a learning path and its courses.
+// This is a public endpoint.
 func (a *API) GetLearningPathHandler(c *gin.Context) {
 	pathID, err := strconv.ParseInt(c.Param("pathId"), 10, 64)
 	if err != nil {
@@ -180,10 +210,24 @@ func (a *API) GetLearningPathHandler(c *gin.Context) {
 }
 
 // DeleteCourseHandler handles deleting a course.
+// It includes an authorization check to ensure only the course author can delete it.
 func (a *API) DeleteCourseHandler(c *gin.Context) {
 	courseID, err := strconv.ParseInt(c.Param("courseId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userID := c.MustGet("userID").(int64)
+
+	// Authorization check: Get the course and verify the author.
+	course, err := a.ContentStore.GetCourse(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+	if course.AuthorID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to delete this course"})
 		return
 	}
 
@@ -198,11 +242,7 @@ func (a *API) DeleteCourseHandler(c *gin.Context) {
 
 // GetAllCoursesHandler handles fetching a paginated list of all courses.
 func (a *API) GetAllCoursesHandler(c *gin.Context) {
-	cursor, _ := strconv.ParseInt(c.Query("cursor"), 10, 64) // Defaults to 0 if not present
-	limit, err := strconv.Atoi(c.Query("limit"))
-	if err != nil || limit <= 0 {
-		limit = 10 // Default limit
-	}
+	cursor, limit := getPaginationParams(c, 10) // Default limit of 10 for courses
 
 	courses, err := a.ContentStore.GetAllCourses(c.Request.Context(), cursor, limit)
 	if err != nil {
@@ -222,10 +262,29 @@ func (a *API) GetAllCoursesHandler(c *gin.Context) {
 }
 
 // UpdateTranscriptHandler handles updating the transcript URL for a lesson.
+// It includes an authorization check to ensure the user is the course author.
 func (a *API) UpdateTranscriptHandler(c *gin.Context) {
 	lessonID, err := strconv.ParseInt(c.Param("lessonId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lesson ID"})
+		return
+	}
+
+	userID := c.MustGet("userID").(int64)
+
+	// Authorization check: Fetch the lesson, then the course, then check the author.
+	lesson, err := a.ContentStore.GetLesson(c.Request.Context(), lessonID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lesson not found"})
+		return
+	}
+	course, err := a.ContentStore.GetCourse(c.Request.Context(), lesson.CourseID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+	if course.AuthorID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to update this lesson"})
 		return
 	}
 
@@ -246,7 +305,8 @@ func (a *API) UpdateTranscriptHandler(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// GetCoursesForUserHandler handles fetching all courses for a specific user.
+// GetCoursesForUserHandler handles fetching all courses created by a specific user.
+// This is a public endpoint.
 func (a *API) GetCoursesForUserHandler(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if err != nil {
@@ -281,11 +341,10 @@ func (a *API) CreateQuizHandler(c *gin.Context) {
 	}
 
 	// 2. Call the Q&A service to generate the quiz
-	qnaServiceURL := "http://qna-service:3003/generate-quiz"
 	qnaReqBody := map[string]string{"text_content": lesson.TextContent}
 	reqBytes, _ := json.Marshal(qnaReqBody)
 
-	resp, err := http.Post(qnaServiceURL, "application/json", bytes.NewBuffer(reqBytes))
+	resp, err := http.Post(a.QnAServiceURL, "application/json", bytes.NewBuffer(reqBytes))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to call Q&A service"})
 		return
