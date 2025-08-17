@@ -63,6 +63,10 @@ func main() {
 		// Learning Path routes
 		v1.POST("/paths", apiHandler.CreateLearningPathHandler)
 		v1.GET("/paths/:pathId", apiHandler.GetLearningPathHandler)
+
+		// Quiz routes
+		v1.POST("/quizzes", apiHandler.CreateQuizHandler)
+		v1.GET("/lessons/:lessonId/quiz", apiHandler.GetQuizByLessonIDHandler)
 	}
 
 	// --- Start Server ---

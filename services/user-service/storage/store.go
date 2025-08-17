@@ -19,4 +19,6 @@ type UserStore interface {
 	UpdatePassword(ctx context.Context, userID int64, newPassword string) error
 	GetCompletedLessonsForUser(ctx context.Context, userID int64) ([]int64, error)
 	MarkLessonAsComplete(ctx context.Context, userID int64, lessonID int64) error
+	CreateQuizAttempt(ctx context.Context, attempt *model.CreateQuizAttemptRequest, userID int64) (*model.QuizAttempt, error)
+	GetQuizAttemptsForUser(ctx context.Context, userID int64) ([]model.QuizAttempt, error)
 }

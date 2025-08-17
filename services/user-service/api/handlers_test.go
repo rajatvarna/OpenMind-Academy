@@ -60,6 +60,14 @@ func (m *MockUserStore) MarkLessonAsComplete(ctx context.Context, userID int64, 
 	return nil
 }
 
+func (m *MockUserStore) CreateQuizAttempt(ctx context.Context, attempt *model.CreateQuizAttemptRequest, userID int64) (*model.QuizAttempt, error) {
+	return nil, nil
+}
+
+func (m *MockUserStore) GetQuizAttemptsForUser(ctx context.Context, userID int64) ([]model.QuizAttempt, error) {
+	return nil, nil
+}
+
 // MockMessageBroker is a mock implementation of the MessageBroker.
 type MockMessageBroker struct{}
 
@@ -100,22 +108,36 @@ func TestForgotPasswordHandler(t *testing.T) {
 		mockMessageBroker := &MockMessageBroker{}
 		apiHandler := NewAPI(userStore, mockMessageBroker)
 
-		router := gin.Default()
-		router.POST("/password/forgot", apiHandler.ForgotPasswordHandler)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
 
-		// Create a request
 		body := map[string]string{"email": "test@example.com"}
 		jsonBody, _ := json.Marshal(body)
-		req, _ := http.NewRequest(http.MethodPost, "/password/forgot", bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
+		c.Request, _ = http.NewRequest(http.MethodPost, "/password/forgot", bytes.NewBuffer(jsonBody))
+		c.Request.Header.Set("Content-Type", "application/json")
 
-		// Create a response recorder
+		apiHandler.ForgotPasswordHandler(c)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("User not found", func(t *testing.T) {
+		var userStore storage.UserStore = &MockUserStore{}
+		mockMessageBroker := &MockMessageBroker{}
+		apiHandler := NewAPI(userStore, mockMessageBroker)
+
 		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
 
-		// Serve the request
-		router.ServeHTTP(w, req)
+		body := map[string]string{"email": "not-found@example.com"}
+		jsonBody, _ := json.Marshal(body)
+		c.Request, _ = http.NewRequest(http.MethodPost, "/password/forgot", bytes.NewBuffer(jsonBody))
+		c.Request.Header.Set("Content-Type", "application/json")
 
-		// Check the response
+		apiHandler.ForgotPasswordHandler(c)
+
 		if w.Code != http.StatusOK {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
 		}
@@ -131,24 +153,38 @@ func TestResetPasswordHandler(t *testing.T) {
 		mockMessageBroker := &MockMessageBroker{}
 		apiHandler := NewAPI(userStore, mockMessageBroker)
 
-		router := gin.Default()
-		router.POST("/password/reset", apiHandler.ResetPasswordHandler)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
 
-		// Create a request
 		body := map[string]string{"token": "valid-token", "new_password": "new-password"}
 		jsonBody, _ := json.Marshal(body)
-		req, _ := http.NewRequest(http.MethodPost, "/password/reset", bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
+		c.Request, _ = http.NewRequest(http.MethodPost, "/password/reset", bytes.NewBuffer(jsonBody))
+		c.Request.Header.Set("Content-Type", "application/json")
 
-		// Create a response recorder
-		w := httptest.NewRecorder()
+		apiHandler.ResetPasswordHandler(c)
 
-		// Serve the request
-		router.ServeHTTP(w, req)
-
-		// Check the response
 		if w.Code != http.StatusOK {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("Invalid token", func(t *testing.T) {
+		var userStore storage.UserStore = &MockUserStore{}
+		mockMessageBroker := &MockMessageBroker{}
+		apiHandler := NewAPI(userStore, mockMessageBroker)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		body := map[string]string{"token": "invalid-token", "new_password": "new-password"}
+		jsonBody, _ := json.Marshal(body)
+		c.Request, _ = http.NewRequest(http.MethodPost, "/password/reset", bytes.NewBuffer(jsonBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		apiHandler.ResetPasswordHandler(c)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d; got %d", http.StatusBadRequest, w.Code)
 		}
 	})
 }

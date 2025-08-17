@@ -11,3 +11,6 @@ sentence-transformers==2.2.2
 
 # For making HTTP requests to a real LLM API
 requests==2.31.0
+
+# For OpenAI integration
+openai==0.28.1

@@ -35,3 +35,22 @@ type LoginRequest struct {
 type LoginResponse struct {
 	Token string `json:"token"`
 }
+
+// --- Quiz Attempt Structs ---
+
+// QuizAttempt represents a user's attempt at a quiz.
+type QuizAttempt struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	QuizID    int64     `json:"quiz_id"` // Foreign key to the content service's quizzes table
+	Score     int       `json:"score"`
+	Answers   string    `json:"answers"` // JSON string of the user's answers
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// CreateQuizAttemptRequest defines the payload for submitting a quiz attempt.
+type CreateQuizAttemptRequest struct {
+	QuizID  int64  `json:"quiz_id" binding:"required"`
+	Score   int    `json:"score" binding:"required"`
+	Answers string `json:"answers" binding:"required"`
+}

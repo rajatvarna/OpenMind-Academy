@@ -16,7 +16,12 @@ import (
 
 func main() {
 	// --- Key Loading ---
-	if err := auth.LoadPrivateKey("../secrets/jwtRS256.key"); err != nil {
+	privateKeyPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
+	if privateKeyPath == "" {
+		privateKeyPath = "../secrets/jwtRS256.key"
+		log.Println("JWT_PRIVATE_KEY_PATH not set, using default value.")
+	}
+	if err := auth.LoadPrivateKey(privateKeyPath); err != nil {
 		log.Fatalf("Failed to load private key: %v", err)
 	}
 
@@ -73,7 +78,11 @@ func main() {
 		v1.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
 		v1.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
 		v1.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
+		v1.GET("/users/:userId/quiz-attempts", apiHandler.GetQuizAttemptsForUserHandler)
 		v1.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
+
+		// Authenticated routes - specific to the user
+		v1.POST("/quiz-attempts", apiHandler.CreateQuizAttemptHandler)
 	}
 
 	// --- Start Server ---

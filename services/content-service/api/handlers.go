@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -139,7 +141,7 @@ func (a *API) GetReviewsHandler(c *gin.Context) {
 
 // GetFeaturedCoursesHandler handles fetching all featured courses.
 func (a *API) GetFeaturedCoursesHandler(c *gin.Context) {
-	courses, err := a.store.GetFeaturedCourses(c.Request.Context())
+	courses, err := a.ContentStore.GetFeaturedCourses(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get featured courses"})
 		return
@@ -155,7 +157,7 @@ func (a *API) CreateLearningPathHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	path, err := a.store.CreateLearningPath(c.Request.Context(), &req)
+	path, err := a.ContentStore.CreateLearningPath(c.Request.Context(), &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create learning path"})
 		return
@@ -169,7 +171,7 @@ func (a *API) GetLearningPathHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid path ID"})
 		return
 	}
-	path, err := a.store.GetLearningPathByID(c.Request.Context(), pathID)
+	path, err := a.ContentStore.GetLearningPathByID(c.Request.Context(), pathID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Learning path not found"})
 		return
@@ -185,7 +187,7 @@ func (a *API) DeleteCourseHandler(c *gin.Context) {
 		return
 	}
 
-	err = a.store.DeleteCourse(c.Request.Context(), courseID)
+	err = a.ContentStore.DeleteCourse(c.Request.Context(), courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
 		return
@@ -235,7 +237,7 @@ func (a *API) UpdateTranscriptHandler(c *gin.Context) {
 		return
 	}
 
-	err = a.store.UpdateLessonTranscript(c.Request.Context(), lessonID, req.TranscriptURL)
+	err = a.ContentStore.UpdateLessonTranscript(c.Request.Context(), lessonID, req.TranscriptURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update transcript URL"})
 		return
@@ -252,11 +254,82 @@ func (a *API) GetCoursesForUserHandler(c *gin.Context) {
 		return
 	}
 
-	courses, err := a.store.GetCoursesForUser(c.Request.Context(), userID)
+	courses, err := a.ContentStore.GetCoursesForUser(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get courses for user"})
 		return
 	}
 
 	c.JSON(http.StatusOK, courses)
+}
+
+// --- Quiz Handlers ---
+
+// CreateQuizHandler generates and saves a new quiz for a lesson.
+func (a *API) CreateQuizHandler(c *gin.Context) {
+	var req model.CreateQuizRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	// 1. Get the lesson content to generate the quiz from
+	lesson, err := a.ContentStore.GetLesson(c.Request.Context(), req.LessonID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Lesson not found"})
+		return
+	}
+
+	// 2. Call the Q&A service to generate the quiz
+	qnaServiceURL := "http://qna-service:3003/generate-quiz"
+	qnaReqBody := map[string]string{"text_content": lesson.TextContent}
+	reqBytes, _ := json.Marshal(qnaReqBody)
+
+	resp, err := http.Post(qnaServiceURL, "application/json", bytes.NewBuffer(reqBytes))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to call Q&A service"})
+		return
+	}
+	defer resp.Body.Close()
+
+	var generatedQuiz struct {
+		Questions []model.QuizQuestion `json:"questions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&generatedQuiz); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode quiz from Q&A service"})
+		return
+	}
+
+	// 3. Save the generated quiz to our database
+	newQuiz := &model.Quiz{
+		LessonID:  req.LessonID,
+		Title:     req.Title,
+		Questions: generatedQuiz.Questions,
+	}
+
+	savedQuiz, err := a.ContentStore.CreateQuiz(c.Request.Context(), newQuiz)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save generated quiz"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, savedQuiz)
+}
+
+// GetQuizByLessonIDHandler retrieves the quiz for a specific lesson.
+func (a *API) GetQuizByLessonIDHandler(c *gin.Context) {
+	lessonID, err := strconv.ParseInt(c.Param("lessonId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lesson ID"})
+		return
+	}
+
+	quiz, err := a.ContentStore.GetQuizByLessonID(c.Request.Context(), lessonID)
+	if err != nil {
+		// Could be sql.ErrNoRows
+		c.JSON(http.StatusNotFound, gin.H{"error": "Quiz not found for this lesson"})
+		return
+	}
+
+	c.JSON(http.StatusOK, quiz)
 }

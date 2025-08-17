@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    quiz_id BIGINT NOT NULL, -- Foreign key to content service's quizzes table
+    score INTEGER NOT NULL,
+    answers JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 */
 
 // PostgresUserStore handles database operations for users.
@@ -241,4 +250,50 @@ func (s *PostgresUserStore) UpdatePassword(ctx context.Context, userID int64, ne
 	query := `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
 	_, err = s.db.Exec(ctx, query, string(hashedPassword), userID)
 	return err
+}
+
+// --- Quiz Attempt Storage Functions ---
+
+// CreateQuizAttempt creates a new quiz attempt in the database.
+func (s *PostgresUserStore) CreateQuizAttempt(ctx context.Context, attempt *model.CreateQuizAttemptRequest, userID int64) (*model.QuizAttempt, error) {
+	query := `
+		INSERT INTO quiz_attempts (user_id, quiz_id, score, answers)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, quiz_id, score, answers, created_at
+	`
+	var newAttempt model.QuizAttempt
+	err := s.db.QueryRow(ctx, query, userID, attempt.QuizID, attempt.Score, attempt.Answers).Scan(
+		&newAttempt.ID,
+		&newAttempt.UserID,
+		&newAttempt.QuizID,
+		&newAttempt.Score,
+		&newAttempt.Answers,
+		&newAttempt.CreatedAt,
+	)
+	return &newAttempt, err
+}
+
+// GetQuizAttemptsForUser retrieves all quiz attempts for a given user.
+func (s *PostgresUserStore) GetQuizAttemptsForUser(ctx context.Context, userID int64) ([]model.QuizAttempt, error) {
+	query := `
+		SELECT id, user_id, quiz_id, score, answers, created_at
+		FROM quiz_attempts
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+	rows, err := s.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var attempts []model.QuizAttempt
+	for rows.Next() {
+		var attempt model.QuizAttempt
+		if err := rows.Scan(&attempt.ID, &attempt.UserID, &attempt.QuizID, &attempt.Score, &attempt.Answers, &attempt.CreatedAt); err != nil {
+			return nil, err
+		}
+		attempts = append(attempts, attempt)
+	}
+	return attempts, nil
 }

@@ -1,107 +1,106 @@
+const authMiddleware = require('./middleware/auth');
+const rbacMiddleware = require('./middleware/rbac');
 const { roles, permissions, publicRoutes } = require('./rbac_config');
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
 
-// This is a simplified version of the rbacMiddleware from index.js for testing
-const rbacMiddleware = (req, res, next) => {
-    const isPublic = publicRoutes.some(route => {
-        const regex = new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`);
-        return regex.test(req.path) && route.method === req.method;
-    });
+// Mock the file system to provide a dummy JWT key
+jest.mock('fs');
 
-    if (isPublic) {
-        return next();
-    }
-
-    const role = req.user ? req.user.role : roles.USER;
-    const userPermissions = permissions[role] || [];
-
-    if (userPermissions.includes('*')) {
-        return next(); // Admins can do anything
-    }
-
-    const matchedPermission = userPermissions.find(p => {
-        const regex = new RegExp(`^${p.path.replace(/:\w+/g, '[^/]+')}$`);
-        return regex.test(req.path) && p.method === req.method;
-    });
-
-    if (matchedPermission) {
-        if (matchedPermission.own === true) {
-            const requesterId = req.user.user_id.toString();
-            // A more robust way to extract the user ID from the path
-            const resourceId = req.params.userId || (req.path.split('/')[3]);
-
-            if (requesterId === resourceId) {
-                return next();
-            }
-            return res.status(403).json({ error: 'Forbidden: You can only access your own resources.' });
-        } else if (matchedPermission.own === false) {
-            // This permission is for moderators/admins to access any user's resource
-            return next();
-        }
-        return next();
-    }
-
-    return res.status(403).json({ error: 'Forbidden: You do not have permission to access this resource.' });
-};
-
-
-describe('RBAC Middleware', () => {
+describe('API Gateway Middlewares', () => {
   let mockRequest;
   let mockResponse;
   let nextFunction;
+  let privateKey;
+
+  beforeAll(() => {
+    // Generate a dummy RSA key pair for testing
+    const { privateKey: genPrivateKey, publicKey } = require('crypto').generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    privateKey = genPrivateKey;
+    fs.readFileSync.mockReturnValue(publicKey);
+  });
 
   beforeEach(() => {
     mockRequest = {
       headers: {},
       user: null,
       params: {},
+      path: '',
+      method: '',
     };
     mockResponse = {
       status: jest.fn(() => mockResponse),
       json: jest.fn(),
+      send: jest.fn(),
     };
     nextFunction = jest.fn();
   });
 
-  // Test cases for admin
-  test('Admin should be able to access any resource', () => {
-    mockRequest.user = { role: 'admin' };
-    mockRequest.path = '/api/users/123/full-profile';
-    mockRequest.method = 'GET';
-    rbacMiddleware(mockRequest, mockResponse, nextFunction);
-    expect(nextFunction).toHaveBeenCalled();
+  describe('authMiddleware', () => {
+    it('should call next() for a public route', () => {
+      mockRequest.path = '/api/users/login';
+      mockRequest.method = 'POST';
+      authMiddleware(mockRequest, mockResponse, nextFunction);
+      expect(nextFunction).toHaveBeenCalled();
+    });
+
+    it('should return 401 if no token is provided for a protected route', () => {
+      mockRequest.path = '/api/users/profile';
+      mockRequest.method = 'GET';
+      authMiddleware(mockRequest, mockResponse, nextFunction);
+      expect(mockResponse.status).toHaveBeenCalledWith(401);
+    });
+
+    it('should return 401 for an invalid token', () => {
+      mockRequest.path = '/api/users/profile';
+      mockRequest.method = 'GET';
+      mockRequest.headers.authorization = 'Bearer invalid-token';
+      authMiddleware(mockRequest, mockResponse, nextFunction);
+      expect(mockResponse.status).toHaveBeenCalledWith(401);
+    });
+
+    it('should call next() and attach user for a valid token', () => {
+        const user = { user_id: 1, role: 'user' };
+        const token = jwt.sign(user, privateKey, { algorithm: 'RS256' });
+        mockRequest.path = '/api/users/profile';
+        mockRequest.method = 'GET';
+        mockRequest.headers.authorization = `Bearer ${token}`;
+
+        authMiddleware(mockRequest, mockResponse, nextFunction);
+
+        expect(nextFunction).toHaveBeenCalled();
+        expect(mockRequest.user).toBeDefined();
+        expect(mockRequest.user.user_id).toBe(1);
+    });
   });
 
-  // Test cases for moderator
-  test('Moderator should be able to access other users resources', () => {
-    mockRequest.user = { role: 'moderator' };
-    mockRequest.path = '/api/users/456/full-profile';
-    mockRequest.method = 'GET';
-    rbacMiddleware(mockRequest, mockResponse, nextFunction);
-    expect(nextFunction).toHaveBeenCalled();
-  });
+  describe('rbacMiddleware', () => {
+    it('should call next() for an admin', () => {
+      mockRequest.user = { role: 'admin' };
+      rbacMiddleware(mockRequest, mockResponse, nextFunction);
+      expect(nextFunction).toHaveBeenCalled();
+    });
 
-  // Test cases for user
-  test('User should be able to access their own resources', () => {
-    mockRequest.user = { user_id: '123', role: 'user' };
-    mockRequest.path = '/api/users/123/full-profile';
-    mockRequest.method = 'GET';
-    rbacMiddleware(mockRequest, mockResponse, nextFunction);
-    expect(nextFunction).toHaveBeenCalled();
-  });
+    it('should call next() for a user with correct permissions', () => {
+      mockRequest.user = { user_id: 1, role: 'user' };
+      mockRequest.path = '/api/users/1/progress';
+      mockRequest.method = 'GET';
+      mockRequest.params.userId = '1';
+      rbacMiddleware(mockRequest, mockResponse, nextFunction);
+      expect(nextFunction).toHaveBeenCalled();
+    });
 
-  test('User should be denied access to other users resources', () => {
-    mockRequest.user = { user_id: '123', role: 'user' };
-    mockRequest.path = '/api/users/456/full-profile';
-    mockRequest.method = 'GET';
-    rbacMiddleware(mockRequest, mockResponse, nextFunction);
-    expect(mockResponse.status).toHaveBeenCalledWith(403);
-  });
-
-  // Test cases for public routes
-  test('Public route should be accessible without authentication', () => {
-    mockRequest.path = '/api/content/courses';
-    mockRequest.method = 'GET';
-    rbacMiddleware(mockRequest, mockResponse, nextFunction);
-    expect(nextFunction).toHaveBeenCalled();
+    it('should return 403 for a user trying to access another user\'s resource', () => {
+        mockRequest.user = { user_id: 1, role: 'user' };
+        mockRequest.path = '/api/users/2/progress';
+        mockRequest.method = 'GET';
+        mockRequest.params.userId = '2';
+        rbacMiddleware(mockRequest, mockResponse, nextFunction);
+        expect(mockResponse.status).toHaveBeenCalledWith(403);
+    });
   });
 });

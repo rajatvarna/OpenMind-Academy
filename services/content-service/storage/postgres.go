@@ -57,6 +57,16 @@ CREATE TABLE IF NOT EXISTS learning_path_courses (
     PRIMARY KEY (path_id, course_id)
 );
 
+CREATE TABLE IF NOT EXISTS quizzes (
+    id BIGSERIAL PRIMARY KEY,
+    lesson_id BIGINT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    questions JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (lesson_id) -- A lesson can only have one quiz
+);
+
 */
 
 // ContentStore handles database operations for content.
@@ -105,6 +115,27 @@ func (s *ContentStore) GetCourse(ctx context.Context, courseID int64) (*model.Co
 	return &course, err
 }
 
+// GetLesson retrieves a single lesson by its ID.
+func (s *ContentStore) GetLesson(ctx context.Context, lessonID int64) (*model.Lesson, error) {
+	query := `
+		SELECT id, title, text_content, video_url, course_id, position, created_at, updated_at
+		FROM lessons
+		WHERE id = $1
+	`
+	var lesson model.Lesson
+	err := s.db.QueryRow(ctx, query, lessonID).Scan(
+		&lesson.ID,
+		&lesson.Title,
+		&lesson.TextContent,
+		&lesson.VideoURL,
+		&lesson.CourseID,
+		&lesson.Position,
+		&lesson.CreatedAt,
+		&lesson.UpdatedAt,
+	)
+	return &lesson, err
+}
+
 // GetFeaturedCourses retrieves a list of all featured courses.
 func (s *ContentStore) GetFeaturedCourses(ctx context.Context) ([]model.Course, error) {
 	rows, err := s.db.Query(ctx, "SELECT id, title, description, author_id, is_featured, created_at, updated_at FROM courses WHERE is_featured = TRUE ORDER BY created_at DESC")
@@ -122,6 +153,46 @@ func (s *ContentStore) GetFeaturedCourses(ctx context.Context) ([]model.Course, 
 		courses = append(courses, c)
 	}
 	return courses, nil
+}
+
+// --- Quiz Storage Functions ---
+
+// CreateQuiz creates a new quiz in the database.
+func (s *ContentStore) CreateQuiz(ctx context.Context, quiz *model.Quiz) (*model.Quiz, error) {
+	query := `
+		INSERT INTO quizzes (lesson_id, title, questions)
+		VALUES ($1, $2, $3)
+		RETURNING id, lesson_id, title, questions, created_at, updated_at
+	`
+	var newQuiz model.Quiz
+	err := s.db.QueryRow(ctx, query, quiz.LessonID, quiz.Title, quiz.Questions).Scan(
+		&newQuiz.ID,
+		&newQuiz.LessonID,
+		&newQuiz.Title,
+		&newQuiz.Questions,
+		&newQuiz.CreatedAt,
+		&newQuiz.UpdatedAt,
+	)
+	return &newQuiz, err
+}
+
+// GetQuizByLessonID retrieves a quiz for a given lesson.
+func (s *ContentStore) GetQuizByLessonID(ctx context.Context, lessonID int64) (*model.Quiz, error) {
+	query := `
+		SELECT id, lesson_id, title, questions, created_at, updated_at
+		FROM quizzes
+		WHERE lesson_id = $1
+	`
+	var quiz model.Quiz
+	err := s.db.QueryRow(ctx, query, lessonID).Scan(
+		&quiz.ID,
+		&quiz.LessonID,
+		&quiz.Title,
+		&quiz.Questions,
+		&quiz.CreatedAt,
+		&quiz.UpdatedAt,
+	)
+	return &quiz, err
 }
 
 // DeleteCourse deletes a course and all its associated content (lessons, reviews) via cascading deletes.

@@ -98,7 +98,7 @@ func (a *API) ForgotPasswordHandler(c *gin.Context) {
 	}
 
 	user, err := a.UserStore.GetUserByEmail(c.Request.Context(), req.Email)
-	if err != nil {
+	if err != nil || user == nil {
 		// Don't reveal if the user exists or not.
 		c.JSON(http.StatusOK, gin.H{"message": "If a user with that email exists, a password reset link has been sent."})
 		return
@@ -147,7 +147,7 @@ func (a *API) ResetPasswordHandler(c *gin.Context) {
 	}
 
 	user, err := a.UserStore.GetUserByPasswordResetToken(c.Request.Context(), req.Token)
-	if err != nil {
+	if err != nil || user == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired token."})
 		return
 	}
@@ -245,6 +245,58 @@ func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// --- Quiz Attempt Handlers ---
+
+// CreateQuizAttemptHandler handles saving a user's quiz attempt.
+func (a *API) CreateQuizAttemptHandler(c *gin.Context) {
+	userIDHeader := c.GetHeader("X-User-Id")
+	if userIDHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
+		return
+	}
+	userID, err := strconv.ParseInt(userIDHeader, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
+		return
+	}
+
+	var req model.CreateQuizAttemptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	attempt, err := a.UserStore.CreateQuizAttempt(c.Request.Context(), &req, userID)
+	if err != nil {
+		log.Printf("Error creating quiz attempt for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save quiz attempt"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, attempt)
+}
+
+// GetQuizAttemptsForUserHandler retrieves all quiz attempts for a user.
+func (a *API) GetQuizAttemptsForUserHandler(c *gin.Context) {
+	// This endpoint can be accessed by the user themselves or by a moderator/admin.
+	// The API Gateway should have already authorized this request.
+	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
+		return
+	}
+
+	attempts, err := a.UserStore.GetQuizAttemptsForUser(c.Request.Context(), targetUserID)
+	if err != nil {
+		log.Printf("Error getting quiz attempts for user %d: %v", targetUserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve quiz attempts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, attempts)
+}
+
 
 // GetProgressHandler retrieves the list of completed lesson IDs for a user.
 func (a *API) GetProgressHandler(c *gin.Context) {

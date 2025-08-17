@@ -77,3 +77,29 @@ type CreateLearningPathRequest struct {
 	Description string  `json:"description"`
 	CourseIDs   []int64 `json:"course_ids" binding:"required"` // Ordered list of course IDs
 }
+
+// --- Quiz Structs ---
+
+// Quiz represents a quiz associated with a lesson.
+type Quiz struct {
+	ID        int64          `json:"id"`
+	LessonID  int64          `json:"lesson_id"`
+	Title     string         `json:"title"`
+	Questions []QuizQuestion `json:"questions"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// QuizQuestion represents a single question in a quiz.
+type QuizQuestion struct {
+	Type          string   `json:"type"` // 'multiple-choice', 'true-false', 'short-answer'
+	Question      string   `json:"question"`
+	Options       []string `json:"options,omitempty"`
+	CorrectAnswer string   `json:"correct_answer"`
+}
+
+// CreateQuizRequest defines the payload for creating a new quiz.
+type CreateQuizRequest struct {
+	LessonID int64  `json:"lesson_id" binding:"required"`
+	Title    string `json:"title" binding:"required"`
+}
