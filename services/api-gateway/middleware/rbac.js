@@ -1,44 +1,70 @@
 const { roles, permissions, publicRoutes } = require('../rbac_config');
 
-const rbacMiddleware = (req, res, next) => {
-    const isPublic = publicRoutes.some(route => {
-        const regex = new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`);
-        return regex.test(req.path) && route.method === req.method;
+// --- Optimization: Pre-compile permission routes ---
+const permissionMatchers = {};
+for (const role in permissions) {
+    permissionMatchers[role] = permissions[role].map(p => {
+        if (p === '*') return '*';
+        return {
+            ...p,
+            regex: new RegExp(`^${p.path.replace(/:\w+/g, '[^/]+')}$`),
+        };
     });
+}
+// --- End Optimization ---
 
-    if (isPublic) {
+/**
+ * Middleware for Role-Based Access Control (RBAC).
+ * It checks if the user's role has the necessary permission to access a route.
+ * It also handles ownership checks for resources.
+ */
+const rbacMiddleware = (req, res, next) => {
+    // The auth middleware has already identified public routes.
+    if (req.isPublic) {
         return next();
     }
 
-    const role = req.user ? req.user.role : roles.USER;
-    const userPermissions = permissions[role] || [];
-
-    if (userPermissions.includes('*')) {
-        return next(); // Admins can do anything
+    // If the route is not public, a user must be attached to the request.
+    // The auth middleware should have already sent a 401 if not.
+    if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    const matchedPermission = userPermissions.find(p => {
-        const regex = new RegExp(`^${p.path.replace(/:\w+/g, '[^/]+')}$`);
-        return regex.test(req.path) && p.method === req.method;
-    });
+    const role = req.user.role;
+    const userPermissions = permissionMatchers[role] || [];
+
+    // Admins have universal access.
+    if (userPermissions.includes('*')) {
+        return next();
+    }
+
+    // Find a permission that matches the requested route and method.
+    const matchedPermission = userPermissions.find(p =>
+        p.regex && p.regex.test(req.path) && p.method === req.method
+    );
 
     if (matchedPermission) {
+        // If the permission requires ownership, perform a check.
         if (matchedPermission.own === true) {
             const requesterId = req.user.user_id.toString();
-            // A more robust way to extract the user ID from the path
-            const resourceId = req.params.userId || (req.path.split('/')[3]);
+            const resourceIdParam = matchedPermission.param;
 
-            if (requesterId === resourceId) {
-                return next();
+            // If the permission defines a URL parameter for the resource ID, check it.
+            if (resourceIdParam && req.params[resourceIdParam]) {
+                if (requesterId === req.params[resourceIdParam]) {
+                    return next(); // User is accessing their own resource.
+                }
+                // If the IDs don't match, access is forbidden.
+                return res.status(403).json({ error: 'Forbidden: You can only access your own resources.' });
             }
-            return res.status(403).json({ error: 'Forbidden: You can only access your own resources.' });
-        } else if (matchedPermission.own === false) {
-            // This permission is for moderators/admins to access any user's resource
+            // If no param is specified (e.g., /api/users/profile), it's a direct resource of the user.
             return next();
         }
+        // If `own` is not true, the permission is granted without an ownership check.
         return next();
     }
 
+    // If no matching permission was found, deny access.
     return res.status(403).json({ error: 'Forbidden: You do not have permission to access this resource.' });
 };
 

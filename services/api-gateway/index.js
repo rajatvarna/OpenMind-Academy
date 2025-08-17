@@ -42,13 +42,15 @@ const services = [
 
 // --- Proxy Middleware Setup ---
 services.forEach(({ route, target }) => {
+    // Common proxy options
     const proxyOptions = {
         target,
-        changeOrigin: true,
+        changeOrigin: true, // Necessary for virtual-hosted sites
         pathRewrite: {
-            [`^${route}`]: '',
+            [`^${route}`]: '', // Rewrite path to remove the gateway-specific route prefix
         },
         onProxyReq: (proxyReq, req, res) => {
+            // Forward user identity to downstream services
             if (req.user) {
                 proxyReq.setHeader('X-User-Id', req.user.user_id);
                 proxyReq.setHeader('X-User-Role', req.user.role);
@@ -56,11 +58,13 @@ services.forEach(({ route, target }) => {
             console.log(`Proxying request for user ${req.user ? req.user.user_id : 'Guest'} to: ${target}${req.originalUrl}`);
         },
         onError: (err, req, res) => {
+            // Centralized error handling for proxy issues
             console.error('Proxy error:', err);
             res.status(500).send('Proxy Error');
         }
     };
 
+    // Apply the proxy for the defined route
     app.use(route, createProxyMiddleware(proxyOptions));
 });
 

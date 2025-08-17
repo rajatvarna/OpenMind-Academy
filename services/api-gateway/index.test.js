@@ -1,27 +1,34 @@
-const authMiddleware = require('./middleware/auth');
-const rbacMiddleware = require('./middleware/rbac');
-const { roles, permissions, publicRoutes } = require('./rbac_config');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-
-// Mock the file system to provide a dummy JWT key
-jest.mock('fs');
+const path = require('path');
+const { generateKeyPairSync } = require('crypto');
 
 describe('API Gateway Middlewares', () => {
   let mockRequest;
   let mockResponse;
+  let authMiddleware;
+  let rbacMiddleware;
   let nextFunction;
   let privateKey;
+  const keyPath = path.join(__dirname, 'test_key.pub');
 
   beforeAll(() => {
-    // Generate a dummy RSA key pair for testing
-    const { privateKey: genPrivateKey, publicKey } = require('crypto').generateKeyPairSync('rsa', {
+    const { privateKey: genPrivateKey, publicKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding: { type: 'spki', format: 'pem' },
       privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     });
     privateKey = genPrivateKey;
-    fs.readFileSync.mockReturnValue(publicKey);
+    fs.writeFileSync(keyPath, publicKey);
+    process.env.JWT_PUBLIC_KEY_PATH = keyPath;
+
+    // Load modules after setting the environment variable
+    authMiddleware = require('./middleware/auth');
+    rbacMiddleware = require('./middleware/rbac');
+  });
+
+  afterAll(() => {
+    fs.unlinkSync(keyPath);
   });
 
   beforeEach(() => {
