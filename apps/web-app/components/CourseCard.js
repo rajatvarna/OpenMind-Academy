@@ -1,6 +1,5 @@
 import React from 'react';
 import Link from 'next/link';
-import styles from '../styles/CourseCard.module.css';
 
 /**
  * A card component that displays a summary of a course.
@@ -15,9 +14,9 @@ const CourseCard = ({ course }) => {
   return (
     // The entire card is a link to the course's detail page.
     <Link href={`/course/${course.id}`} legacyBehavior>
-      <a className={styles.card}>
-        <h3>{course.title} &rarr;</h3>
-        <p>{course.description}</p>
+      <a className="m-4 p-6 text-left text-inherit no-underline border border-gray-200 rounded-lg transition-colors duration-150 ease-in-out w-5/12 hover:text-blue-600 hover:border-blue-600 focus:text-blue-600 focus:border-blue-600 active:text-blue-600 active:border-blue-600">
+        <h3 className="mb-4 text-2xl">{course.title} &rarr;</h3>
+        <p className="m-0 text-xl leading-normal">{course.description}</p>
       </a>
     </Link>
   );

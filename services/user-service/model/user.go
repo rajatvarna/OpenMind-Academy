@@ -6,14 +6,15 @@ import "time"
 // The `json` tags control how the struct is serialized to JSON for API responses.
 // Note that PasswordHash is omitted from JSON responses for security.
 type User struct {
-	ID        int64     `json:"id"`
-	Email     string    `json:"email"`
-	PasswordHash string    `json:"-"` // Omit from JSON output
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int64                  `json:"id"`
+	Email        string                 `json:"email"`
+	PasswordHash string                 `json:"-"` // Omit from JSON output
+	FirstName    string                 `json:"first_name"`
+	LastName     string                 `json:"last_name"`
+	Role         string                 `json:"role"`
+	Preferences  map[string]interface{} `json:"preferences"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
 }
 
 // RegistrationRequest represents the payload for a user registration request.

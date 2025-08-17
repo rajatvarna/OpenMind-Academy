@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/free-education/user-service/auth"
+	"github.com/free-education/user-service/messaging"
 	"github.com/free-education/user-service/model"
 	"github.com/free-education/user-service/storage"
 	"github.com/gin-gonic/gin"
@@ -15,7 +17,8 @@ import (
 
 // API holds the dependencies for the API handlers, like the user store.
 type API struct {
-	UserStore *storage.UserStore
+	UserStore      storage.UserStore
+	MessageBroker messaging.MessageBroker
 }
 
 // MarkCompleteRequest defines the payload for marking a lesson as complete.
@@ -24,8 +27,11 @@ type MarkCompleteRequest struct {
 }
 
 // NewAPI creates a new API struct with its dependencies.
-func NewAPI(userStore *storage.UserStore) *API {
-	return &API{UserStore: userStore}
+func NewAPI(userStore storage.UserStore, messageBroker messaging.MessageBroker) *API {
+	return &API{
+		UserStore:      userStore,
+		MessageBroker: messageBroker,
+	}
 }
 
 // RegisterUserHandler handles the logic for user registration.
@@ -81,6 +87,86 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, model.LoginResponse{Token: token})
 }
 
+// ForgotPasswordHandler handles the logic for sending a password reset link.
+func (a *API) ForgotPasswordHandler(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	user, err := a.UserStore.GetUserByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		// Don't reveal if the user exists or not.
+		c.JSON(http.StatusOK, gin.H{"message": "If a user with that email exists, a password reset link has been sent."})
+		return
+	}
+
+	token, err := auth.GenerateSecureToken(32)
+	if err != nil {
+		log.Printf("Error generating token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request."})
+		return
+	}
+
+	expiresAt := time.Now().Add(time.Hour * 1) // Token valid for 1 hour
+	if err := a.UserStore.CreatePasswordResetToken(c.Request.Context(), user.ID, token, expiresAt); err != nil {
+		log.Printf("Error creating password reset token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request."})
+		return
+	}
+
+	// In a real app, you would get the frontend URL from config.
+	resetLink := fmt.Sprintf("http://localhost:3001/reset-password?token=%s", token)
+
+	// Publish event to RabbitMQ
+	payload := map[string]interface{}{
+		"email":     user.Email,
+		"name":      user.FirstName,
+		"resetLink": resetLink,
+	}
+	if err := a.MessageBroker.Publish(c.Request.Context(), "notifications_events", "password_reset_requested", payload); err != nil {
+		log.Printf("Error publishing password reset event: %v", err)
+		// Don't fail the whole request if the notification fails.
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "If a user with that email exists, a password reset link has been sent."})
+}
+
+// ResetPasswordHandler handles the logic for resetting a user's password.
+func (a *API) ResetPasswordHandler(c *gin.Context) {
+	var req struct {
+		Token       string `json:"token" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=8"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	user, err := a.UserStore.GetUserByPasswordResetToken(c.Request.Context(), req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired token."})
+		return
+	}
+
+	if err := a.UserStore.UpdatePassword(c.Request.Context(), user.ID, req.NewPassword); err != nil {
+		log.Printf("Error updating password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password."})
+		return
+	}
+
+	// Clean up the used token
+	if err := a.UserStore.DeletePasswordResetToken(c.Request.Context(), req.Token); err != nil {
+		log.Printf("Error deleting password reset token: %v", err)
+		// Don't fail the request if cleanup fails, but log it.
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password has been reset successfully."})
+}
+
 // GetProfileHandler retrieves the profile for the currently authenticated user.
 func (a *API) GetProfileHandler(c *gin.Context) {
 	userIDHeader := c.GetHeader("X-User-Id")
@@ -105,6 +191,59 @@ func (a *API) GetProfileHandler(c *gin.Context) {
 
 	// The User model already omits the password hash, so it's safe to return.
 	c.JSON(http.StatusOK, user)
+}
+
+// GetUserPreferencesHandler retrieves the preferences for the currently authenticated user.
+func (a *API) GetUserPreferencesHandler(c *gin.Context) {
+	userIDHeader := c.GetHeader("X-User-Id")
+	if userIDHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
+		return
+	}
+
+	id, err := strconv.ParseInt(userIDHeader, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
+		return
+	}
+
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), id)
+	if err != nil {
+		log.Printf("Error fetching preferences for user %d: %v", id, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user.Preferences)
+}
+
+// UpdateUserPreferencesHandler updates the preferences for the currently authenticated user.
+func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
+	userIDHeader := c.GetHeader("X-User-Id")
+	if userIDHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID header not provided"})
+		return
+	}
+
+	id, err := strconv.ParseInt(userIDHeader, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID format"})
+		return
+	}
+
+	var prefs map[string]interface{}
+	if err := c.ShouldBindJSON(&prefs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	if err := a.UserStore.UpdateUserPreferences(c.Request.Context(), id, prefs); err != nil {
+		log.Printf("Error updating preferences for user %d: %v", id, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // GetProgressHandler retrieves the list of completed lesson IDs for a user.

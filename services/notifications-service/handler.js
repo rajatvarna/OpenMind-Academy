@@ -18,6 +18,9 @@ async function handleEvent(eventType, payload) {
     case 'content_rejected':
       return handleContentRejected(payload);
 
+    case 'password_reset_requested':
+      return handlePasswordResetRequested(payload);
+
     default:
       console.log(`No handler for event type: ${eventType}`);
       return Promise.resolve();
@@ -77,6 +80,24 @@ function handleContentRejected(payload) {
     to: authorEmail,
     subject: `Update on your submission: "${courseTitle}"`,
     html: `<p>Hi there,</p><p>Thank you for your submission. Unfortunately, your course "${courseTitle}" was not approved at this time.</p><p><b>Reason:</b> ${reason || 'No reason provided.'}</p>`,
+  });
+}
+
+/**
+ * Handles the 'password_reset_requested' event.
+ * @param {object} payload - Expected to contain { email, name, resetLink }.
+ */
+function handlePasswordResetRequested(payload) {
+  const { email, name, resetLink } = payload;
+  if (!email || !name || !resetLink) {
+    console.error('Invalid payload for password_reset_requested:', payload);
+    return;
+  }
+
+  return sendEmail({
+    to: email,
+    subject: 'Reset Your Password',
+    html: `<strong>Hi ${name},</strong><p>You requested a password reset. Click the link below to reset your password:</p><a href="${resetLink}">${resetLink}</a><p>If you did not request this, please ignore this email.</p>`,
   });
 }
 

@@ -13,17 +13,18 @@ var (
 	signKey *rsa.PrivateKey
 )
 
-func init() {
-	// In a real app, the path to the key should be configurable.
-	keyBytes, err := ioutil.ReadFile("../secrets/jwtRS256.key")
+// LoadPrivateKey loads the RSA private key from a file.
+func LoadPrivateKey(path string) error {
+	keyBytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading private key: %s", err))
+		return fmt.Errorf("error reading private key: %w", err)
 	}
 
 	signKey, err = jwt.ParseRSAPrivateKeyFromPEM(keyBytes)
 	if err != nil {
-		panic(fmt.Sprintf("Error parsing private key: %s", err))
+		return fmt.Errorf("error parsing private key: %w", err)
 	}
+	return nil
 }
 
 // Claims defines the structure of the JWT claims.

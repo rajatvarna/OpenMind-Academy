@@ -1,28 +1,27 @@
 import Head from 'next/head';
 import CourseCard from '../components/CourseCard';
-import styles from '../styles/Home.module.css';
 
 export default function Home({ courses, featuredCourses }) {
   return (
-    <div className="container">
+    <div className="container mx-auto px-4">
       <Head>
         <title>Free Education Platform - Courses</title>
         <meta name="description" content="Browse our list of free courses." />
       </Head>
 
-      <main>
-        <h1 className={styles.title}>
+      <main className="py-10">
+        <h1 className="text-5xl font-bold text-center">
           Welcome to the Future of Learning
         </h1>
 
-        <p className={styles.description}>
+        <p className="text-xl text-center mt-4 mb-12">
           Explore our community-generated courses on any topic imaginable.
         </p>
 
         {featuredCourses && featuredCourses.length > 0 && (
-          <div className={styles.featuredSection}>
-            <h2>Featured Courses</h2>
-            <div className={styles.grid}>
+          <div className="mb-16">
+            <h2 className="text-3xl font-bold text-center mb-8">Featured Courses</h2>
+            <div className="flex flex-wrap justify-center">
               {featuredCourses.map((course) => (
                 <CourseCard key={course.id} course={course} />
               ))}
@@ -30,8 +29,8 @@ export default function Home({ courses, featuredCourses }) {
           </div>
         )}
 
-        <h2 className={styles.allCoursesTitle}>All Courses</h2>
-        <div className={styles.grid}>
+        <h2 className="text-3xl font-bold text-center mb-8">All Courses</h2>
+        <div className="flex flex-wrap justify-center">
           {courses.map((course) => (
             <CourseCard key={course.id} course={course} />
           ))}

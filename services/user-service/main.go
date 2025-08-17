@@ -7,12 +7,19 @@ import (
 	"os"
 
 	"github.com/free-education/user-service/api"
+	"github.com/free-education/user-service/messaging"
 	"github.com/free-education/user-service/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/free-education/user-service/auth"
 )
 
 func main() {
+	// --- Key Loading ---
+	if err := auth.LoadPrivateKey("../secrets/jwtRS256.key"); err != nil {
+		log.Fatalf("Failed to load private key: %v", err)
+	}
+
 	// --- Database Connection ---
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -29,7 +36,19 @@ func main() {
 
 	// --- Dependency Injection ---
 	userStore := storage.NewUserStore(dbpool)
-	apiHandler := api.NewAPI(userStore)
+
+	rabbitMQURL := os.Getenv("RABBITMQ_URL")
+	if rabbitMQURL == "" {
+		rabbitMQURL = "amqp://guest:guest@rabbitmq:5672/"
+		log.Println("RABBITMQ_URL not set, using default Docker Compose value.")
+	}
+	messageBroker, err := messaging.NewRabbitMQClient(rabbitMQURL)
+	if err != nil {
+		log.Fatalf("Unable to connect to RabbitMQ: %v\n", err)
+	}
+	defer messageBroker.Close()
+
+	apiHandler := api.NewAPI(userStore, messageBroker)
 
 	// --- Router Setup ---
 	router := gin.Default()
@@ -45,9 +64,13 @@ func main() {
 		// Unauthenticated routes
 		v1.POST("/register", apiHandler.RegisterUserHandler)
 		v1.POST("/login", apiHandler.LoginUserHandler)
+		v1.POST("/password/forgot", apiHandler.ForgotPasswordHandler)
+		v1.POST("/password/reset", apiHandler.ResetPasswordHandler)
 
 		// Authenticated routes are now protected by the API Gateway
 		v1.GET("/profile", apiHandler.GetProfileHandler)
+		v1.GET("/preferences", apiHandler.GetUserPreferencesHandler)
+		v1.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
 		v1.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
 		v1.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
 		v1.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
