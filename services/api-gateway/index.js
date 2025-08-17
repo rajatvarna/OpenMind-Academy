@@ -6,29 +6,31 @@ const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 require('dotenv').config();
-const { roles, permissions } = require('./rbac_config');
+const { roles, permissions, publicRoutes } = require('./rbac_config');
 
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(helmet()); // Basic security headers
-app.use(cors());   // Enable Cross-Origin Resource Sharing
-app.use(morgan('combined')); // Request logging
-app.use(express.json()); // To parse JSON bodies
+// --- Core Middleware ---
+app.use(helmet()); // Set various HTTP headers for security
+app.use(cors());   // Enable Cross-Origin Resource Sharing for all routes
+app.use(morgan('combined')); // Log HTTP requests
+app.use(express.json()); // Parse incoming JSON requests
 
 // --- Authentication Middleware ---
-const publicRoutes = [
-    '/api/users/login',
-    '/api/users/register',
-    '/health'
-];
-
+// This middleware is responsible for verifying the JWT token.
+// It checks for the Authorization header, verifies the token, and attaches the decoded user to the request.
+// Public routes are skipped by this middleware.
 const publicKey = fs.readFileSync('../secrets/jwtRS256.key.pub');
 
 const authMiddleware = (req, res, next) => {
-    if (publicRoutes.some(path => req.path.startsWith(path))) {
+    const isPublic = publicRoutes.some(route => {
+        const regex = new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`);
+        return regex.test(req.path) && route.method === req.method;
+    });
+
+    if (isPublic) {
         return next();
     }
 
@@ -49,18 +51,23 @@ const authMiddleware = (req, res, next) => {
 
 app.use(authMiddleware);
 
-// --- RBAC Middleware ---
+// --- RBAC (Role-Based Access Control) Middleware ---
+// This middleware enforces permissions based on user roles.
+// It checks the user's role (from the JWT token) against the permissions defined in `rbac_config.js`.
+// It supports wildcard permissions for admins, and "own" resource checks for users.
 const rbacMiddleware = (req, res, next) => {
-    if (publicRoutes.some(path => req.path.startsWith(path))) {
+    // Public routes are allowed to bypass the RBAC check.
+    const isPublic = publicRoutes.some(route => {
+        const regex = new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`);
+        return regex.test(req.path) && route.method === req.method;
+    });
+
+    if (isPublic) {
         return next();
     }
 
     const role = req.user ? req.user.role : roles.USER;
-    const userPermissions = permissions[role];
-
-    if (!userPermissions) {
-        return res.status(403).json({ error: 'Forbidden: Invalid role.' });
-    }
+    const userPermissions = permissions[role] || [];
 
     if (userPermissions.includes('*')) {
         return next(); // Admins can do anything
@@ -72,19 +79,18 @@ const rbacMiddleware = (req, res, next) => {
     });
 
     if (matchedPermission) {
-        if (matchedPermission.own) {
+        if (matchedPermission.own === true) {
             const requesterId = req.user.user_id.toString();
-            const resourceMatch = req.path.match(/\/(api\/(users|gamification)\/([^\/]+))\//);
-            const resourceId = resourceMatch ? resourceMatch[3] : null;
+            // A more robust way to extract the user ID from the path
+            const resourceId = req.params.userId || (req.path.split('/')[3]);
 
             if (requesterId === resourceId) {
                 return next();
             }
-            // Allow moderators and admins to access "own" routes for any user
-            if (role === roles.MODERATOR || role === roles.ADMIN) {
-                return next();
-            }
             return res.status(403).json({ error: 'Forbidden: You can only access your own resources.' });
+        } else if (matchedPermission.own === false) {
+            // This permission is for moderators/admins to access any user's resource
+            return next();
         }
         return next();
     }
@@ -96,10 +102,9 @@ app.use(rbacMiddleware);
 
 // --- Service Routes ---
 
-// In a Kubernetes environment, 'user-service', 'content-service', etc.,
-// would be the names of the Kubernetes services. The gateway would resolve
-// these names to the correct internal IP addresses.
-
+// --- Service-to-Route Mapping ---
+// This configuration maps API routes to their corresponding backend microservices.
+// The `target` URLs would typically be the internal DNS names of the services in a container orchestration environment (e.g., Kubernetes).
 const services = [
     {
         route: '/api/users',
@@ -120,16 +125,19 @@ const services = [
     // Add other services here as they are built
 ];
 
-// Set up the proxy for each service
+// --- Proxy Middleware Setup ---
+// Dynamically create proxy middleware for each service defined above.
+// The `http-proxy-middleware` library handles the request forwarding.
 services.forEach(({ route, target }) => {
-    app.use(route, createProxyMiddleware({
+    // Options for the proxy middleware
+    const proxyOptions = {
         target,
-        changeOrigin: true,
+        changeOrigin: true, // Needed for virtual hosted sites
         pathRewrite: {
-            [`^${route}`]: '', // remove base path
+            [`^${route}`]: '', // Rewrite path: remove the base route segment
         },
         onProxyReq: (proxyReq, req, res) => {
-            // Add user identity headers to the downstream request
+            // Forward user identity to downstream services
             if (req.user) {
                 proxyReq.setHeader('X-User-Id', req.user.user_id);
                 proxyReq.setHeader('X-User-Role', req.user.role);
@@ -138,17 +146,21 @@ services.forEach(({ route, target }) => {
         },
         onError: (err, req, res) => {
             console.error('Proxy error:', err);
-            res.status(500).send('Proxy error');
+            res.status(500).send('Proxy Error');
         }
-    }));
+    };
+
+    app.use(route, createProxyMiddleware(proxyOptions));
 });
 
-// Health check endpoint
+// --- Health Check Endpoint ---
+// A simple endpoint to verify that the gateway is running.
+// This is useful for load balancers and container orchestrators.
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// Start the server
+// --- Server Activation ---
 app.listen(PORT, () => {
     console.log(`API Gateway listening on port ${PORT}`);
 });

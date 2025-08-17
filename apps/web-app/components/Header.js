@@ -6,8 +6,15 @@ import SearchBar from './SearchBar';
 import DonationModal from './DonationModal';
 import { useState } from 'react';
 
+/**
+ * The main header for the web application.
+ * It displays the site logo, navigation links, a search bar, and user-specific information.
+ * It handles different states for logged-in and logged-out users.
+ */
 const Header = () => {
+  // useAuth provides user session, stats, and authentication functions
   const { user, stats, logout, loading } = useAuth();
+  // State to control the visibility of the donation modal
   const [showDonationModal, setShowDonationModal] = useState(false);
 
   return (

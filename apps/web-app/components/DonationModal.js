@@ -4,7 +4,7 @@ import styles from '../styles/DonationModal.module.css';
 
 import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 
-const CheckoutForm = () => {
+const CheckoutForm = ({ onCancel }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -41,9 +41,14 @@ const CheckoutForm = () => {
   return (
     <form onSubmit={handleSubmit}>
       <PaymentElement />
-      <button disabled={isProcessing || !stripe || !elements} className={styles.submitButton}>
-        {isProcessing ? "Processing..." : "Donate"}
-      </button>
+      <div className={styles.buttonGroup}>
+        <button type="button" onClick={onCancel} className={styles.cancelButton}>
+          Cancel
+        </button>
+        <button disabled={isProcessing || !stripe || !elements} className={styles.submitButton}>
+          {isProcessing ? "Processing..." : "Donate"}
+        </button>
+      </div>
       {/* Show any error or success messages */}
       {message && <div id="payment-message">{message}</div>}
     </form>
@@ -93,7 +98,7 @@ export default function DonationModal({ show, onClose }) {
         </form>
       ) : (
         <Elements options={{ clientSecret }}>
-          <CheckoutForm />
+          <CheckoutForm onCancel={() => setClientSecret(null)} />
         </Elements>
       )}
     </Modal>
