@@ -19,6 +19,10 @@ type User struct {
 	ProfilePictureURL string `json:"profile_picture_url,omitempty"`
 	// The role of the user (e.g., 'user', 'admin'). Determines permissions.
 	Role string `json:"role"`
+	// The OAuth provider used for social login (e.g., 'google').
+	OAuthProvider string `json:"oauth_provider,omitempty"`
+	// The user's unique ID from the OAuth provider.
+	OAuthProviderID string `json:"-"`
 	// Whether the user has enabled two-factor authentication.
 	TwoFactorEnabled bool `json:"two_factor_enabled"`
 	// The secret key for TOTP. Never exposed to the client.

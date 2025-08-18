@@ -16,11 +16,13 @@ Expected Database Schema:
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     profile_picture_url TEXT,
     role VARCHAR(50) NOT NULL DEFAULT 'user', -- 'user', 'moderator', 'admin'
+    oauth_provider TEXT,
+    oauth_provider_id TEXT,
     two_factor_enabled BOOLEAN NOT NULL DEFAULT false,
     two_factor_secret TEXT,
     two_factor_recovery_codes TEXT[],
@@ -108,6 +110,37 @@ func (s *PostgresUserStore) CreateUser(ctx context.Context, userReq *model.Regis
 	return &newUser, nil
 }
 
+// CreateOAuthUser creates a new user from an OAuth provider.
+// It does not require a password.
+func (s *PostgresUserStore) CreateOAuthUser(ctx context.Context, user *model.User) (*model.User, error) {
+	query := `
+		INSERT INTO users (email, first_name, last_name, oauth_provider, oauth_provider_id, preferences)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, email, first_name, last_name, role, preferences, created_at, updated_at
+	`
+
+	defaultPrefs := map[string]interface{}{"theme": "light"}
+
+	var newUser model.User
+	err := s.db.QueryRow(ctx, query, user.Email, user.FirstName, user.LastName, user.OAuthProvider, user.OAuthProviderID, defaultPrefs).Scan(
+		&newUser.ID,
+		&newUser.Email,
+		&newUser.FirstName,
+		&newUser.LastName,
+		&newUser.Role,
+		&newUser.Preferences,
+		&newUser.CreatedAt,
+		&newUser.UpdatedAt,
+	)
+
+	if err != nil {
+		log.Printf("Error creating OAuth user: %v", err)
+		return nil, err
+	}
+
+	return &newUser, nil
+}
+
 // GetUserByEmail retrieves a user by their email address.
 func (s *PostgresUserStore) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
@@ -134,6 +167,27 @@ func (s *PostgresUserStore) GetUserByEmail(ctx context.Context, email string) (*
 	}
 
 	return &user, nil
+}
+
+// GetUserByOAuthID retrieves a user by their OAuth provider and provider-specific ID.
+func (s *PostgresUserStore) GetUserByOAuthID(ctx context.Context, provider string, providerID string) (*model.User, error) {
+	query := `
+		SELECT id, email, password_hash, first_name, last_name, role, preferences, created_at, updated_at
+		FROM users WHERE oauth_provider = $1 AND oauth_provider_id = $2
+	`
+	var user model.User
+	err := s.db.QueryRow(ctx, query, provider, providerID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.FirstName,
+		&user.LastName,
+		&user.Role,
+		&user.Preferences,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	return &user, err
 }
 
 // GetUserByID retrieves a user by their ID.
@@ -242,6 +296,17 @@ func (s *PostgresUserStore) Activate2FA(ctx context.Context, userID int64) error
 	query := `
 		UPDATE users
 		SET two_factor_enabled = true, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := s.db.Exec(ctx, query, userID)
+	return err
+}
+
+// Disable2FA marks 2FA as disabled for a user and clears the secret.
+func (s *PostgresUserStore) Disable2FA(ctx context.Context, userID int64) error {
+	query := `
+		UPDATE users
+		SET two_factor_enabled = false, two_factor_secret = NULL, two_factor_recovery_codes = NULL, updated_at = NOW()
 		WHERE id = $1
 	`
 	_, err := s.db.Exec(ctx, query, userID)

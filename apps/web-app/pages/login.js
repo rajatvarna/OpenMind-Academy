@@ -118,6 +118,12 @@ export default function LoginPage() {
         )}
 
         {error && <p className={styles.error}>{error}</p>}
+
+        <div className={styles.divider}>OR</div>
+
+        <a href="/api/users/login/google" className={`${styles.button} ${styles.googleButton}`}>
+          Login with Google
+        </a>
       </main>
     </div>
   );

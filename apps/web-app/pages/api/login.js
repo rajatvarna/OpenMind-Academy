@@ -28,20 +28,11 @@ export default async function handler(req, res) {
       return res.status(apiRes.status).json({ message: errorData.error || 'Authentication failed.' });
     }
 
-    const { token } = await apiRes.json();
+    const data = await apiRes.json();
 
-    // Set the JWT in a secure, HttpOnly cookie.
-    // This cookie will be automatically sent by the browser on subsequent requests.
-    const cookie = serialize('auth_token', token, {
-      httpOnly: true, // The cookie is not accessible via client-side JavaScript
-      secure: process.env.NODE_ENV !== 'development', // Use secure cookies in production
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      sameSite: 'strict',
-      path: '/',
-    });
-
-    res.setHeader('Set-Cookie', cookie);
-    res.status(200).json({ success: true });
+    // The backend will either return a full token, or a temp_token if 2FA is needed.
+    // We just forward this response to the client.
+    res.status(200).json(data);
 
   } catch (error) {
     console.error('Login API route error:', error);

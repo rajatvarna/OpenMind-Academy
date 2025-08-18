@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+
 	"github.com/free-education/user-service/api"
 	"github.com/free-education/user-service/messaging"
 	"github.com/free-education/user-service/model"
@@ -75,6 +78,15 @@ func main() {
 		log.Fatalf("Failed to start user activity consumer: %v", err)
 	}
 
+	// --- OAuth2 Config ---
+	googleOAuthConfig := &oauth2.Config{
+		RedirectURL:  "http://localhost:8080/api/users/login/google/callback",
+		ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Endpoint:     google.Endpoint,
+	}
+
 	frontendBaseURL := os.Getenv("FRONTEND_BASE_URL")
 	if frontendBaseURL == "" {
 		frontendBaseURL = "http://localhost:3001"
@@ -91,7 +103,7 @@ func main() {
 		log.Println("GAMIFICATION_SERVICE_URL not set, using default value.")
 	}
 
-	apiHandler := api.NewAPI(userStore, messageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL)
+	apiHandler := api.NewAPI(userStore, messageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL, googleOAuthConfig)
 
 	// --- Router Setup ---
 	router := gin.Default()
@@ -107,6 +119,9 @@ func main() {
 		// Unauthenticated routes
 		v1.POST("/register", apiHandler.RegisterUserHandler)
 		v1.POST("/login", apiHandler.LoginUserHandler)
+		v1.POST("/login/2fa", apiHandler.Login2FAHandler)
+		v1.GET("/login/google", apiHandler.GoogleLoginHandler)
+		v1.GET("/login/google/callback", apiHandler.GoogleCallbackHandler)
 		v1.POST("/password/forgot", apiHandler.ForgotPasswordHandler)
 		v1.POST("/password/reset", apiHandler.ResetPasswordHandler)
 
@@ -121,6 +136,7 @@ func main() {
 			// 2FA routes
 			authenticated.POST("/2fa/enable", apiHandler.Enable2FAHandler)
 			authenticated.POST("/2fa/verify", apiHandler.Verify2FAHandler)
+			authenticated.POST("/2fa/disable", apiHandler.Disable2FAHandler)
 
 			authenticated.GET("/preferences", apiHandler.GetUserPreferencesHandler)
 			authenticated.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)

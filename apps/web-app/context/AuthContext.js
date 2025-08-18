@@ -9,9 +9,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const login = (token) => {
+    // In a real app, you'd use a library like js-cookie
+    document.cookie = `auth_token=${token}; path=/; max-age=86400`; // 1 day
+    checkUser();
+  };
+
   const checkUser = async () => {
+    const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const userRes = await fetch('/api/me');
+      const userRes = await fetch('/api/me'); // This API route will now need to read the cookie
       if (userRes.ok) {
         const { user } = await userRes.json();
         setUser(user);
@@ -37,15 +50,11 @@ export const AuthProvider = ({ children }) => {
     checkUser();
   }, []);
 
-  const logout = async () => {
-    // Create a logout API route to clear the cookie
-    try {
-      await fetch('/api/logout');
-      setUser(null);
-      router.push('/'); // Redirect to homepage after logout
-    } catch (error) {
-      console.error('Failed to logout', error);
-    }
+  const logout = () => {
+    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    setUser(null);
+    setStats({ score: 0 });
+    router.push('/'); // Redirect to homepage after logout
   };
 
   const refetchUser = async () => {
@@ -53,7 +62,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, stats, loading, logout, refetchUser }}>
+    <AuthContext.Provider value={{ user, stats, loading, login, logout, refetchUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -10,12 +10,15 @@ import (
 // UserStore defines the interface for user storage operations.
 type UserStore interface {
 	CreateUser(ctx context.Context, userReq *model.RegistrationRequest) (*model.User, error)
+	CreateOAuthUser(ctx context.Context, user *model.User) (*model.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
+	GetUserByOAuthID(ctx context.Context, provider string, providerID string) (*model.User, error)
 	GetUserByID(ctx context.Context, userID int64) (*model.User, error)
 	UpdateUserPreferences(ctx context.Context, userID int64, prefs map[string]interface{}) error
 	UpdateProfilePictureURL(ctx context.Context, userID int64, url string) error
 	Store2FASecrets(ctx context.Context, userID int64, secret string, recoveryCodes []string) error
 	Activate2FA(ctx context.Context, userID int64) error
+	Disable2FA(ctx context.Context, userID int64) error
 	DeactivateUser(ctx context.Context, userID int64) error
 	Get2FAData(ctx context.Context, userID int64) (secret string, enabled bool, err error)
 	CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error

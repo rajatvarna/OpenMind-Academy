@@ -3,9 +3,11 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
+	"golang.org/x/oauth2"
 
 	"github.com/free-education/user-service/auth"
 	"github.com/free-education/user-service/messaging"
@@ -24,11 +27,12 @@ import (
 
 // API holds the dependencies for the API handlers, like the user store.
 type API struct {
-	UserStore             storage.UserStore
-	MessageBroker         messaging.MessageBroker
-	FrontendBaseURL       string
-	ContentServiceURL     string
+	UserStore              storage.UserStore
+	MessageBroker          messaging.MessageBroker
+	FrontendBaseURL        string
+	ContentServiceURL      string
 	GamificationServiceURL string
+	GoogleOAuthConfig      *oauth2.Config
 }
 
 // MarkCompleteRequest defines the payload for marking a lesson as complete.
@@ -389,6 +393,102 @@ func generateRecoveryCodes(count int, length int) ([]string, error) {
 	return codes, nil
 }
 
+// --- OAuth Handlers ---
+
+func (a *API) generateStateOauthCookie(c *gin.Context) string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	state := base64.URLEncoding.EncodeToString(b)
+	c.SetCookie("oauthstate", state, 3600, "/", "", false, true)
+	return state
+}
+
+func (a *API) GoogleLoginHandler(c *gin.Context) {
+	state := a.generateStateOauthCookie(c)
+	url := a.GoogleOAuthConfig.AuthCodeURL(state)
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+func (a *API) GoogleCallbackHandler(c *gin.Context) {
+	// Read oauthState from Cookie
+	oauthState, _ := c.Cookie("oauthstate")
+	if c.Request.FormValue("state") != oauthState {
+		log.Println("invalid oauth google state")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/login?error=invalid_state", a.FrontendBaseURL))
+		return
+	}
+
+	data, err := a.getUserDataFromGoogle(c.Request.FormValue("code"))
+	if err != nil {
+		log.Println(err.Error())
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/login?error=oauth_failed", a.FrontendBaseURL))
+		return
+	}
+
+	// Get user info
+	var userInfo struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &userInfo); err != nil {
+		log.Println(err.Error())
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/login?error=oauth_failed", a.FrontendBaseURL))
+		return
+	}
+
+	// Check if user already exists
+	user, err := a.UserStore.GetUserByOAuthID(c.Request.Context(), "google", userInfo.ID)
+	if err != nil {
+		// User does not exist, check by email
+		user, err = a.UserStore.GetUserByEmail(c.Request.Context(), userInfo.Email)
+		if err != nil {
+			// User does not exist, create new user
+			newUser := &model.User{
+				Email:           userInfo.Email,
+				FirstName:       userInfo.Name,
+				OAuthProvider:   "google",
+				OAuthProviderID: userInfo.ID,
+			}
+			user, err = a.UserStore.CreateOAuthUser(c.Request.Context(), newUser)
+			if err != nil {
+				log.Printf("Error creating OAuth user: %v", err)
+				c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/login?error=creation_failed", a.FrontendBaseURL))
+				return
+			}
+		}
+	}
+
+	// Generate JWT
+	token, err := auth.GenerateToken(user.ID, user.Role)
+	if err != nil {
+		log.Printf("Error generating JWT for user %d: %v", user.ID, err)
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/login?error=token_failed", a.FrontendBaseURL))
+		return
+	}
+
+	// For simplicity, we'll redirect with the token in the query string.
+	// In a real app, you might use a more secure method.
+	c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth/callback?token=%s", a.FrontendBaseURL, token))
+}
+
+func (a *API) getUserDataFromGoogle(code string) ([]byte, error) {
+	token, err := a.GoogleOAuthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
+	}
+	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting user info: %s", err.Error())
+	}
+	defer response.Body.Close()
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed read response: %s", err.Error())
+	}
+	return contents, nil
+}
+
 // Enable2FAHandler begins the process of enabling two-factor authentication.
 // It generates a new TOTP secret and recovery codes for the user.
 func (a *API) Enable2FAHandler(c *gin.Context) {
@@ -463,6 +563,19 @@ func (a *API) Verify2FAHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "2FA enabled successfully."})
+}
+
+// Disable2FAHandler handles disabling 2FA for a user.
+func (a *API) Disable2FAHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+
+	if err := a.UserStore.Disable2FA(c.Request.Context(), userID); err != nil {
+		log.Printf("Error disabling 2FA for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable 2FA."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "2FA disabled successfully."})
 }
 
 // --- Account Deactivation ---
