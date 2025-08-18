@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/pquerna/otp/totp"
 
 	"github.com/free-education/user-service/auth"
 	"github.com/free-education/user-service/messaging"
@@ -94,10 +98,87 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 		return
 	}
 
+	// Check if 2FA is enabled for the user.
+	_, twoFactorEnabled, err := a.UserStore.Get2FAData(c.Request.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error getting 2FA data for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process login."})
+		return
+	}
+
+	if twoFactorEnabled {
+		// If 2FA is enabled, issue a temporary token and prompt for 2FA verification.
+		tempToken, err := auth.Generate2FATempToken(user.ID)
+		if err != nil {
+			log.Printf("Error generating 2FA temp token for user %d: %v", user.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate 2FA token."})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "2FA token required",
+			"temp_token": tempToken,
+		})
+		return
+	}
+
+	// If 2FA is not enabled, issue a full-access token.
 	token, err := auth.GenerateToken(user.ID, user.Role)
 	if err != nil {
 		log.Printf("Error generating JWT: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.LoginResponse{Token: token})
+}
+
+// Login2FARequest represents the payload for the 2FA login request.
+type Login2FARequest struct {
+	TempToken string `json:"temp_token" binding:"required"`
+	Token     string `json:"token" binding:"required"`
+}
+
+// Login2FAHandler handles the second step of the 2FA login process.
+func (a *API) Login2FAHandler(c *gin.Context) {
+	var req Login2FARequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	// Validate the temporary token
+	claims, err := auth.ValidateToken(req.TempToken)
+	if err != nil || claims.Type != "2fa_temp" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired temporary token."})
+		return
+	}
+
+	// Get the user's 2FA secret
+	secret, enabled, err := a.UserStore.Get2FAData(c.Request.Context(), claims.UserID)
+	if err != nil || !enabled || secret == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "2FA is not enabled or user not found."})
+		return
+	}
+
+	// Validate the TOTP token
+	valid := totp.Validate(req.Token, secret)
+	if !valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA token."})
+		return
+	}
+
+	// Get user role to generate full token
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user details."})
+		return
+	}
+
+	// If everything is valid, issue a full-access token
+	token, err := auth.GenerateToken(user.ID, user.Role)
+	if err != nil {
+		log.Printf("Error generating JWT for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token."})
 		return
 	}
 
@@ -285,6 +366,97 @@ func (a *API) UploadProfilePictureHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Profile picture updated successfully.", "url": url})
+}
+
+// --- 2FA Handlers ---
+
+// generateRecoveryCodes creates a set of random strings to be used as single-use recovery codes.
+func generateRecoveryCodes(count int, length int) ([]string, error) {
+	codes := make([]string, count)
+	for i := 0; i < count; i++ {
+		bytes := make([]byte, length)
+		if _, err := rand.Read(bytes); err != nil {
+			return nil, err
+		}
+		codes[i] = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(bytes)
+	}
+	return codes, nil
+}
+
+// Enable2FAHandler begins the process of enabling two-factor authentication.
+// It generates a new TOTP secret and recovery codes for the user.
+func (a *API) Enable2FAHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+	user, err := a.UserStore.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "FreeEdu",
+		AccountName: user.Email,
+	})
+	if err != nil {
+		log.Printf("Error generating TOTP key for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate 2FA secret."})
+		return
+	}
+
+	recoveryCodes, err := generateRecoveryCodes(10, 10) // 10 codes, 10 chars each
+	if err != nil {
+		log.Printf("Error generating recovery codes for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate recovery codes."})
+		return
+	}
+
+	if err := a.UserStore.Store2FASecrets(c.Request.Context(), userID, key.Secret(), recoveryCodes); err != nil {
+		log.Printf("Error storing 2FA secrets for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save 2FA configuration."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "2FA setup initiated. Please scan the QR code and verify.",
+		"otpauth_url":    key.URL(),
+		"recovery_codes": recoveryCodes,
+	})
+}
+
+// Verify2FARequest represents the payload for the 2FA verification request.
+type Verify2FARequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// Verify2FAHandler completes the 2FA setup process by verifying a TOTP token.
+func (a *API) Verify2FAHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+
+	var req Verify2FARequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+
+	secret, _, err := a.UserStore.Get2FAData(c.Request.Context(), userID)
+	if err != nil || secret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA not initiated or user not found."})
+		return
+	}
+
+	valid := totp.Validate(req.Token, secret)
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid 2FA token."})
+		return
+	}
+
+	if err := a.UserStore.Activate2FA(c.Request.Context(), userID); err != nil {
+		log.Printf("Error activating 2FA for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate 2FA."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "2FA enabled successfully."})
 }
 
 // --- Quiz Attempt Handlers ---

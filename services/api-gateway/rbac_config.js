@@ -54,6 +54,7 @@ const permissions = {
 const publicRoutes = [
   { path: '/api/users/register', method: 'POST' },
   { path: '/api/users/login', method: 'POST' },
+  { path: '/api/users/login/2fa', method: 'POST' },
   { path: '/api/content/courses', method: 'GET' },
   { path: '/api/content/courses/featured', method: 'GET' },
   { path: '/api/content/courses/:courseId', method: 'GET' },

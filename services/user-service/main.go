@@ -94,6 +94,11 @@ func main() {
 		{
 			authenticated.GET("/profile", apiHandler.GetProfileHandler)
 			authenticated.POST("/profile/picture", apiHandler.UploadProfilePictureHandler)
+
+			// 2FA routes
+			authenticated.POST("/2fa/enable", apiHandler.Enable2FAHandler)
+			authenticated.POST("/2fa/verify", apiHandler.Verify2FAHandler)
+
 			authenticated.GET("/preferences", apiHandler.GetUserPreferencesHandler)
 			authenticated.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
 			authenticated.GET("/users/:userId/progress", apiHandler.GetProgressHandler)

@@ -27,21 +27,23 @@ func LoadPrivateKey(path string) error {
 	return nil
 }
 
-// Claims defines the structure of the JWT claims.
-type Claims struct {
+// AuthClaims defines the structure of the JWT claims for authentication.
+type AuthClaims struct {
 	UserID int64  `json:"user_id"`
-	Role   string `json:"role"`
+	Role   string `json:"role,omitempty"`
+	Type   string `json:"type"` // e.g., "full_auth", "2fa_temp"
 	jwt.RegisteredClaims
 }
 
-// GenerateToken generates a new JWT for a given user ID and role.
+// GenerateToken generates a new, full-access JWT for a given user ID and role.
 func GenerateToken(userID int64, role string) (string, error) {
 	// Token expires in 24 hours
 	expirationTime := time.Now().Add(24 * time.Hour)
 
-	claims := &Claims{
+	claims := &AuthClaims{
 		UserID: userID,
 		Role:   role,
+		Type:   "full_auth",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -49,14 +51,52 @@ func GenerateToken(userID int64, role string) (string, error) {
 		},
 	}
 
-	// Create the token with the RS256 signing algorithm and the claims
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-
-	// Sign the token with the private key
 	tokenString, err := token.SignedString(signKey)
 	if err != nil {
 		return "", err
 	}
+	return tokenString, nil
+}
 
+// ValidateToken parses and validates a JWT string, returning the claims if valid.
+func ValidateToken(tokenString string) (*AuthClaims, error) {
+	claims := &AuthClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		// Since we're using RSA, we need to provide the public key for verification.
+		return &signKey.PublicKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("token is invalid")
+	}
+
+	return claims, nil
+}
+
+// Generate2FATempToken generates a short-lived temporary token for 2FA verification.
+func Generate2FATempToken(userID int64) (string, error) {
+	// Token expires in 5 minutes
+	expirationTime := time.Now().Add(5 * time.Minute)
+
+	claims := &AuthClaims{
+		UserID: userID,
+		Type:   "2fa_temp",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "user-service",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tokenString, err := token.SignedString(signKey)
+	if err != nil {
+		return "", err
+	}
 	return tokenString, nil
 }

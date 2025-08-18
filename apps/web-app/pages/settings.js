@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Settings.module.css';
 import ProfilePictureUploader from '../components/ProfilePictureUploader';
+import TwoFactorSetup from '../components/TwoFactorSetup';
 
 export default function SettingsPage() {
   const { user, refetchUser } = useAuth();
@@ -76,6 +77,12 @@ export default function SettingsPage() {
         <h2>Profile Picture</h2>
         <p>Upload a new profile picture.</p>
         <ProfilePictureUploader onUploadSuccess={handleUploadSuccess} />
+      </div>
+
+      <div className={styles.settingsForm}>
+        <h2>Two-Factor Authentication (2FA)</h2>
+        <p>Add an extra layer of security to your account.</p>
+        <TwoFactorSetup />
       </div>
     </div>
   );

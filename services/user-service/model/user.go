@@ -19,6 +19,12 @@ type User struct {
 	ProfilePictureURL string `json:"profile_picture_url,omitempty"`
 	// The role of the user (e.g., 'user', 'admin'). Determines permissions.
 	Role string `json:"role"`
+	// Whether the user has enabled two-factor authentication.
+	TwoFactorEnabled bool `json:"two_factor_enabled"`
+	// The secret key for TOTP. Never exposed to the client.
+	TwoFactorSecret string `json:"-"`
+	// Single-use codes for 2FA recovery. Never exposed to the client.
+	TwoFactorRecoveryCodes []string `json:"-"`
 	// A flexible JSONB field for storing user-specific settings, like theme.
 	Preferences map[string]interface{} `json:"preferences"`
 	// The timestamp when the user was created.

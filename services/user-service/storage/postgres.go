@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS users (
     last_name VARCHAR(100),
     profile_picture_url TEXT,
     role VARCHAR(50) NOT NULL DEFAULT 'user', -- 'user', 'moderator', 'admin'
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT false,
+    two_factor_secret TEXT,
+    two_factor_recovery_codes TEXT[],
     preferences JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -211,6 +214,38 @@ func (s *PostgresUserStore) UpdateProfilePictureURL(ctx context.Context, userID 
 	`
 	_, err := s.db.Exec(ctx, query, url, userID)
 	return err
+}
+
+// Store2FASecrets stores the 2FA secret and recovery codes for a user.
+// It does not enable 2FA, it only prepares it.
+func (s *PostgresUserStore) Store2FASecrets(ctx context.Context, userID int64, secret string, recoveryCodes []string) error {
+	query := `
+		UPDATE users
+		SET two_factor_secret = $1, two_factor_recovery_codes = $2, updated_at = NOW()
+		WHERE id = $3
+	`
+	_, err := s.db.Exec(ctx, query, secret, recoveryCodes, userID)
+	return err
+}
+
+// Activate2FA marks 2FA as enabled for a user.
+func (s *PostgresUserStore) Activate2FA(ctx context.Context, userID int64) error {
+	query := `
+		UPDATE users
+		SET two_factor_enabled = true, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := s.db.Exec(ctx, query, userID)
+	return err
+}
+
+// Get2FAData retrieves the 2FA secret and enabled status for a user.
+func (s *PostgresUserStore) Get2FAData(ctx context.Context, userID int64) (string, bool, error) {
+	var secret string
+	var enabled bool
+	query := `SELECT two_factor_secret, two_factor_enabled FROM users WHERE id = $1`
+	err := s.db.QueryRow(ctx, query, userID).Scan(&secret, &enabled)
+	return secret, enabled, err
 }
 
 // CreatePasswordResetToken creates a new password reset token.

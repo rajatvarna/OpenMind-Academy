@@ -47,6 +47,19 @@ func (m *MockUserStore) UpdateUserPreferences(ctx context.Context, userID int64,
 func (m *MockUserStore) UpdateProfilePictureURL(ctx context.Context, userID int64, url string) error {
 	return nil
 }
+func (m *MockUserStore) Store2FASecrets(ctx context.Context, userID int64, secret string, recoveryCodes []string) error {
+	return nil
+}
+func (m *MockUserStore) Activate2FA(ctx context.Context, userID int64) error {
+	return nil
+}
+func (m *MockUserStore) Get2FAData(ctx context.Context, userID int64) (string, bool, error) {
+	if userID == 1 {
+		// Simulate a user who has started the 2FA process but not completed it.
+		return "test-secret", false, nil
+	}
+	return "", false, nil
+}
 func (m *MockUserStore) CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error {
 	return nil
 }
@@ -149,6 +162,63 @@ func TestForgotPasswordHandler(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+		}
+	})
+}
+
+func TestEnable2FAHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var userStore storage.UserStore = &MockUserStore{}
+	mockMessageBroker := &MockMessageBroker{}
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", int64(1)) // Set user ID in context
+
+	c.Request, _ = http.NewRequest(http.MethodPost, "/2fa/enable", nil)
+
+	apiHandler.Enable2FAHandler(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+	}
+
+	var responseBody map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &responseBody); err != nil {
+		t.Fatalf("Failed to decode response body: %v", err)
+	}
+
+	if _, ok := responseBody["otpauth_url"]; !ok {
+		t.Error("expected 'otpauth_url' in response")
+	}
+	if _, ok := responseBody["recovery_codes"]; !ok {
+		t.Error("expected 'recovery_codes' in response")
+	}
+}
+
+func TestVerify2FAHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("Invalid token", func(t *testing.T) {
+		var userStore storage.UserStore = &MockUserStore{}
+		mockMessageBroker := &MockMessageBroker{}
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("userID", int64(1))
+
+		body := map[string]string{"token": "invalid-token"}
+		jsonBody, _ := json.Marshal(body)
+		c.Request, _ = http.NewRequest(http.MethodPost, "/2fa/verify", bytes.NewBuffer(jsonBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		apiHandler.Verify2FAHandler(c)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d; got %d", http.StatusBadRequest, w.Code)
 		}
 	})
 }
