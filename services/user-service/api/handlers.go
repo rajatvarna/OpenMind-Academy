@@ -92,6 +92,12 @@ func (a *API) LoginUserHandler(c *gin.Context) {
 		return
 	}
 
+	// Check if the account is deactivated.
+	if user.DeactivatedAt != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "This account has been deactivated."})
+		return
+	}
+
 	if !storage.CheckPassword(user.PasswordHash, req.Password) {
 		// Incorrect password.
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
@@ -457,6 +463,24 @@ func (a *API) Verify2FAHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "2FA enabled successfully."})
+}
+
+// --- Account Deactivation ---
+
+// DeactivateUserHandler handles a user's request to deactivate their own account.
+func (a *API) DeactivateUserHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+
+	if err := a.UserStore.DeactivateUser(c.Request.Context(), userID); err != nil {
+		log.Printf("Error deactivating user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deactivate account."})
+		return
+	}
+
+	// Here you might also want to publish an event to a message queue
+	// to invalidate all active sessions/tokens for this user.
+
+	c.JSON(http.StatusOK, gin.H{"message": "Account deactivated successfully."})
 }
 
 // --- Quiz Attempt Handlers ---

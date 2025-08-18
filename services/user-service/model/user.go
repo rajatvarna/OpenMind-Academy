@@ -31,6 +31,8 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	// The timestamp when the user was last updated.
 	UpdatedAt time.Time `json:"updated_at"`
+	// The timestamp when the user was deactivated. A null value means the account is active.
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 }
 
 // RegistrationRequest represents the data required to register a new user.

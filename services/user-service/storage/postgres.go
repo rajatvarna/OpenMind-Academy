@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS users (
     two_factor_recovery_codes TEXT[],
     preferences JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deactivated_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS user_lesson_progress (
@@ -233,6 +234,17 @@ func (s *PostgresUserStore) Activate2FA(ctx context.Context, userID int64) error
 	query := `
 		UPDATE users
 		SET two_factor_enabled = true, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := s.db.Exec(ctx, query, userID)
+	return err
+}
+
+// DeactivateUser sets the deactivated_at timestamp for a user.
+func (s *PostgresUserStore) DeactivateUser(ctx context.Context, userID int64) error {
+	query := `
+		UPDATE users
+		SET deactivated_at = NOW(), updated_at = NOW()
 		WHERE id = $1
 	`
 	_, err := s.db.Exec(ctx, query, userID)

@@ -3,9 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Settings.module.css';
 import ProfilePictureUploader from '../components/ProfilePictureUploader';
 import TwoFactorSetup from '../components/TwoFactorSetup';
+import Modal from '../components/Modal';
 
 export default function SettingsPage() {
-  const { user, refetchUser } = useAuth();
+  const { user, refetchUser, logout } = useAuth();
   const [preferences, setPreferences] = useState({ theme: 'light' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,6 +54,25 @@ export default function SettingsPage() {
     refetchUser();
   };
 
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+
+  const handleDeactivate = async () => {
+    setError(null);
+    try {
+      const res = await fetch('/api/users/profile', { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to deactivate account.');
+      }
+      // Logout will handle redirecting the user
+      await logout();
+      setShowDeactivateModal(false);
+    } catch (err) {
+      setError(err.message);
+      setShowDeactivateModal(false);
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -84,6 +104,33 @@ export default function SettingsPage() {
         <p>Add an extra layer of security to your account.</p>
         <TwoFactorSetup />
       </div>
+
+      <div className={`${styles.settingsForm} ${styles.dangerZone}`}>
+        <h2>Danger Zone</h2>
+        <p>Deactivating your account is a permanent action.</p>
+        <button
+          onClick={() => setShowDeactivateModal(true)}
+          className={styles.dangerButton}
+        >
+          Deactivate Account
+        </button>
+      </div>
+
+      <Modal
+        show={showDeactivateModal}
+        onClose={() => setShowDeactivateModal(false)}
+        title="Deactivate Account"
+      >
+        <p>Are you sure you want to deactivate your account? This action cannot be undone.</p>
+        <div className={styles.modalActions}>
+          <button onClick={() => setShowDeactivateModal(false)} className={styles.button}>
+            Cancel
+          </button>
+          <button onClick={handleDeactivate} className={styles.dangerButton}>
+            Deactivate
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

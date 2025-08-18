@@ -93,6 +93,7 @@ func main() {
 		authenticated.Use(api.AuthMiddleware())
 		{
 			authenticated.GET("/profile", apiHandler.GetProfileHandler)
+			authenticated.DELETE("/profile", apiHandler.DeactivateUserHandler)
 			authenticated.POST("/profile/picture", apiHandler.UploadProfilePictureHandler)
 
 			// 2FA routes
