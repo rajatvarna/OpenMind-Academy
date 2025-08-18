@@ -55,6 +55,7 @@ export default function SettingsPage() {
   };
 
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleDeactivate = async () => {
     setError(null);
@@ -70,6 +71,23 @@ export default function SettingsPage() {
     } catch (err) {
       setError(err.message);
       setShowDeactivateModal(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setError(null);
+    try {
+      const res = await fetch('/api/users/account', { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete account.');
+      }
+      // Logout will handle redirecting the user
+      await logout();
+      setShowDeleteModal(false);
+    } catch (err) {
+      setError(err.message);
+      setShowDeleteModal(false);
     }
   };
 
@@ -107,13 +125,24 @@ export default function SettingsPage() {
 
       <div className={`${styles.settingsForm} ${styles.dangerZone}`}>
         <h2>Danger Zone</h2>
-        <p>Deactivating your account is a permanent action.</p>
-        <button
-          onClick={() => setShowDeactivateModal(true)}
-          className={styles.dangerButton}
-        >
-          Deactivate Account
-        </button>
+        <div className={styles.dangerAction}>
+          <p>Deactivate your account. Your data will be kept but your profile will not be public.</p>
+          <button
+            onClick={() => setShowDeactivateModal(true)}
+            className={styles.button}
+          >
+            Deactivate Account
+          </button>
+        </div>
+        <div className={styles.dangerAction}>
+          <p>Permanently delete your account and all of your data. This action is irreversible.</p>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className={styles.dangerButton}
+          >
+            Delete Account
+          </button>
+        </div>
       </div>
 
       <Modal
@@ -128,6 +157,22 @@ export default function SettingsPage() {
           </button>
           <button onClick={handleDeactivate} className={styles.dangerButton}>
             Deactivate
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        show={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Permanently Delete Account"
+      >
+        <p>Are you absolutely sure? This will permanently delete your account, profile, and all associated data. This action cannot be undone.</p>
+        <div className={styles.modalActions}>
+          <button onClick={() => setShowDeleteModal(false)} className={styles.button}>
+            Cancel
+          </button>
+          <button onClick={handleDelete} className={styles.dangerButton}>
+            Yes, Delete My Account
           </button>
         </div>
       </Modal>

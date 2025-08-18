@@ -130,7 +130,8 @@ func main() {
 		authenticated.Use(api.AuthMiddleware())
 		{
 			authenticated.GET("/profile", apiHandler.GetProfileHandler)
-			authenticated.DELETE("/profile", apiHandler.DeactivateUserHandler)
+			authenticated.DELETE("/profile", apiHandler.DeactivateUserHandler) // Kept for deactivation
+			authenticated.DELETE("/account", apiHandler.DeleteUserHandler)     // New route for permanent deletion
 			authenticated.POST("/profile/picture", apiHandler.UploadProfilePictureHandler)
 
 			// 2FA routes

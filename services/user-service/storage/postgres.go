@@ -302,6 +302,14 @@ func (s *PostgresUserStore) Activate2FA(ctx context.Context, userID int64) error
 	return err
 }
 
+// DeleteUser permanently removes a user and all their associated data from the database.
+// The ON DELETE CASCADE constraint on foreign keys will handle related data.
+func (s *PostgresUserStore) DeleteUser(ctx context.Context, userID int64) error {
+	query := `DELETE FROM users WHERE id = $1`
+	_, err := s.db.Exec(ctx, query, userID)
+	return err
+}
+
 // Disable2FA marks 2FA as disabled for a user and clears the secret.
 func (s *PostgresUserStore) Disable2FA(ctx context.Context, userID int64) error {
 	query := `

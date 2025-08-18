@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/base64"
@@ -41,13 +42,14 @@ type MarkCompleteRequest struct {
 }
 
 // NewAPI creates a new API struct with its dependencies.
-func NewAPI(userStore storage.UserStore, messageBroker messaging.MessageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL string) *API {
+func NewAPI(userStore storage.UserStore, messageBroker messaging.MessageBroker, frontendBaseURL, contentServiceURL, gamificationServiceURL string, googleOAuthConfig *oauth2.Config) *API {
 	return &API{
-		UserStore:             userStore,
-		MessageBroker:         messageBroker,
-		FrontendBaseURL:       frontendBaseURL,
-		ContentServiceURL:     contentServiceURL,
+		UserStore:              userStore,
+		MessageBroker:          messageBroker,
+		FrontendBaseURL:        frontendBaseURL,
+		ContentServiceURL:      contentServiceURL,
 		GamificationServiceURL: gamificationServiceURL,
+		GoogleOAuthConfig:      googleOAuthConfig,
 	}
 }
 
@@ -594,6 +596,31 @@ func (a *API) DeactivateUserHandler(c *gin.Context) {
 	// to invalidate all active sessions/tokens for this user.
 
 	c.JSON(http.StatusOK, gin.H{"message": "Account deactivated successfully."})
+}
+
+// DeleteUserHandler handles a user's request to permanently delete their own account.
+func (a *API) DeleteUserHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+
+	// It's good practice to log this significant event.
+	log.Printf("Attempting to permanently delete user %d", userID)
+
+	if err := a.UserStore.DeleteUser(c.Request.Context(), userID); err != nil {
+		log.Printf("Error permanently deleting user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account."})
+		return
+	}
+
+	// Publish an event to notify other services that this user has been deleted.
+	// This is crucial for data consistency across the microservices ecosystem.
+	payload := map[string]interface{}{"user_id": userID}
+	if err := a.MessageBroker.Publish(c.Request.Context(), "user_events", "user_deleted", payload); err != nil {
+		// Log the error, but don't fail the request. The primary operation (DB deletion) was successful.
+		// A monitoring system should alert on these kinds of failures.
+		log.Printf("CRITICAL: Failed to publish user_deleted event for user %d: %v", userID, err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Account permanently deleted."})
 }
 
 // --- User Activity Handlers ---

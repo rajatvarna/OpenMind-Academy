@@ -29,6 +29,7 @@ import (
 type MockUserStore struct {
 	users               map[int64]*model.User
 	emailToID           map[string]int64
+	oauthIDToUserID     map[string]int64 // provider-id -> userID
 	passwordResetTokens map[string]int64 // token -> userID
 	nextID              int64
 }
@@ -37,6 +38,7 @@ func NewMockUserStore() *MockUserStore {
 	return &MockUserStore{
 		users:               make(map[int64]*model.User),
 		emailToID:           make(map[string]int64),
+		oauthIDToUserID:     make(map[string]int64),
 		passwordResetTokens: make(map[string]int64),
 		nextID:              1,
 	}
@@ -59,6 +61,22 @@ func (m *MockUserStore) CreateUser(ctx context.Context, userReq *model.Registrat
 	return newUser, nil
 }
 
+func (m *MockUserStore) CreateOAuthUser(ctx context.Context, user *model.User) (*model.User, error) {
+	newUser := &model.User{
+		ID:              m.nextID,
+		Email:           user.Email,
+		FirstName:       user.FirstName,
+		LastName:        user.LastName,
+		OAuthProvider:   user.OAuthProvider,
+		OAuthProviderID: user.OAuthProviderID,
+	}
+	m.users[newUser.ID] = newUser
+	m.emailToID[newUser.Email] = newUser.ID
+	m.oauthIDToUserID[user.OAuthProvider+"-"+user.OAuthProviderID] = newUser.ID
+	m.nextID++
+	return newUser, nil
+}
+
 func (m *MockUserStore) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	id, ok := m.emailToID[email]
 	if !ok {
@@ -66,6 +84,14 @@ func (m *MockUserStore) GetUserByEmail(ctx context.Context, email string) (*mode
 	}
 	user, _ := m.users[id]
 	return user, nil
+}
+
+func (m *MockUserStore) GetUserByOAuthID(ctx context.Context, provider string, providerID string) (*model.User, error) {
+	userID, ok := m.oauthIDToUserID[provider+"-"+providerID]
+	if !ok {
+		return nil, errors.New("user not found")
+	}
+	return m.GetUserByID(ctx, userID)
 }
 
 func (m *MockUserStore) GetUserByID(ctx context.Context, userID int64) (*model.User, error) {
@@ -87,9 +113,35 @@ func (m *MockUserStore) Store2FASecrets(ctx context.Context, userID int64, secre
 func (m *MockUserStore) Activate2FA(ctx context.Context, userID int64) error {
 	return nil
 }
-func (m *MockUserStore) DeactivateUser(ctx context.Context, userID int64) error {
+
+func (m *MockUserStore) Disable2FA(ctx context.Context, userID int64) error {
+	user, ok := m.users[userID]
+	if ok {
+		user.TwoFactorEnabled = false
+		user.TwoFactorSecret = ""
+	}
 	return nil
 }
+
+func (m *MockUserStore) DeactivateUser(ctx context.Context, userID int64) error {
+	user, ok := m.users[userID]
+	if ok {
+		now := time.Now()
+		user.DeactivatedAt = &now
+	}
+	return nil
+}
+
+func (m *MockUserStore) DeleteUser(ctx context.Context, userID int64) error {
+	user, ok := m.users[userID]
+	if !ok {
+		return errors.New("user not found")
+	}
+	delete(m.emailToID, user.Email)
+	delete(m.users, userID)
+	return nil
+}
+
 func (m *MockUserStore) Get2FAData(ctx context.Context, userID int64) (string, bool, error) {
 	return "", false, nil
 }
@@ -175,7 +227,7 @@ func TestForgotPasswordHandler(t *testing.T) {
 		userStore := NewMockUserStore()
 		userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -195,7 +247,7 @@ func TestForgotPasswordHandler(t *testing.T) {
 	t.Run("User not found", func(t *testing.T) {
 		userStore := NewMockUserStore()
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -218,7 +270,7 @@ func TestGetUserActivityHandler(t *testing.T) {
 
 	userStore := NewMockUserStore()
 	mockMessageBroker := &MockMessageBroker{}
-	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -238,7 +290,7 @@ func TestDeactivateUserHandler(t *testing.T) {
 
 	userStore := NewMockUserStore()
 	mockMessageBroker := &MockMessageBroker{}
-	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -261,7 +313,7 @@ func TestLoginUserHandler(t *testing.T) {
 		userStore := NewMockUserStore()
 		userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -285,7 +337,7 @@ func TestLoginUserHandler(t *testing.T) {
 		user.DeactivatedAt = &now
 
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -309,7 +361,7 @@ func TestEnable2FAHandler(t *testing.T) {
 	userStore := NewMockUserStore()
 	userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
 	mockMessageBroker := &MockMessageBroker{}
-	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -342,7 +394,7 @@ func TestVerify2FAHandler(t *testing.T) {
 	t.Run("Invalid token", func(t *testing.T) {
 		userStore := NewMockUserStore()
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -366,7 +418,7 @@ func TestUploadProfilePictureHandler(t *testing.T) {
 
 	userStore := NewMockUserStore()
 	mockMessageBroker := &MockMessageBroker{}
-	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 	// Create a buffer to store our request body
 	body := &bytes.Buffer{}
@@ -431,7 +483,7 @@ func TestGetFullProfileHandler(t *testing.T) {
 	userStore := NewMockUserStore()
 	userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
 	mockMessageBroker := &MockMessageBroker{}
-	apiHandler := NewAPI(userStore, mockMessageBroker, "", contentServer.URL, gamificationServer.URL)
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", contentServer.URL, gamificationServer.URL, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -456,6 +508,44 @@ func TestGetFullProfileHandler(t *testing.T) {
 	}
 }
 
+func TestDeleteUserHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userStore := NewMockUserStore()
+	user, _ := userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
+
+	mockMessageBroker := &MockMessageBroker{}
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", user.ID) // Set user ID in context
+
+	c.Request, _ = http.NewRequest(http.MethodDelete, "/account", nil)
+
+	apiHandler.DeleteUserHandler(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+	}
+
+	var responseBody map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &responseBody); err != nil {
+		t.Fatalf("Failed to decode response body: %v", err)
+	}
+
+	expectedMessage := "Account permanently deleted."
+	if responseBody["message"] != expectedMessage {
+		t.Errorf("expected message '%s'; got '%s'", expectedMessage, responseBody["message"])
+	}
+
+	// Verify the user was actually deleted from the store
+	_, err := userStore.GetUserByID(context.Background(), user.ID)
+	if err == nil {
+		t.Error("expected an error when getting deleted user, but got nil")
+	}
+}
+
 func TestResetPasswordHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	setupTestKey(t)
@@ -465,7 +555,7 @@ func TestResetPasswordHandler(t *testing.T) {
 		user, _ := userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
 		userStore.CreatePasswordResetToken(context.Background(), user.ID, "valid-token", time.Now().Add(time.Hour))
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -485,7 +575,7 @@ func TestResetPasswordHandler(t *testing.T) {
 	t.Run("Invalid token", func(t *testing.T) {
 		userStore := NewMockUserStore()
 		mockMessageBroker := &MockMessageBroker{}
-		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "", nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

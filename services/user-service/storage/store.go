@@ -20,6 +20,7 @@ type UserStore interface {
 	Activate2FA(ctx context.Context, userID int64) error
 	Disable2FA(ctx context.Context, userID int64) error
 	DeactivateUser(ctx context.Context, userID int64) error
+	DeleteUser(ctx context.Context, userID int64) error
 	Get2FAData(ctx context.Context, userID int64) (secret string, enabled bool, err error)
 	CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error
 	GetUserByPasswordResetToken(ctx context.Context, token string) (*model.User, error)
