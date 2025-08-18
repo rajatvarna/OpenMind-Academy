@@ -403,9 +403,8 @@ func (a *API) GetFullProfileHandler(c *gin.Context) {
 		result := <-ch
 		if result.err != nil {
 			log.Printf("Error fetching from %s service: %v", result.from, result.err)
-			// For now, we'll continue and return partial data, but a more robust
-			// error handling strategy (e.g., circuit breaker) might be needed.
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve full user profile due to an error with a downstream service."})
+			return
 		}
 		switch result.from {
 		case "gamification":

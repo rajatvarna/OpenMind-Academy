@@ -33,7 +33,10 @@ func (m *MockUserStore) GetUserByEmail(ctx context.Context, email string) (*mode
 	return nil, nil // Simulate user not found
 }
 func (m *MockUserStore) GetUserByID(ctx context.Context, userID int64) (*model.User, error) {
-	return nil, nil
+	if userID == 1 {
+		return &model.User{ID: 1, Email: "test@example.com", FirstName: "Test"}, nil
+	}
+	return nil, nil // Simulate user not found
 }
 func (m *MockUserStore) UpdateUserPreferences(ctx context.Context, userID int64, prefs map[string]interface{}) error {
 	return nil
@@ -142,6 +145,49 @@ func TestForgotPasswordHandler(t *testing.T) {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
 		}
 	})
+}
+
+func TestGetFullProfileHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Mock Gamification Service
+	gamificationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"score": "100", "rank": "gold"})
+	}))
+	defer gamificationServer.Close()
+
+	// Mock Content Service (configured to fail)
+	contentServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer contentServer.Close()
+
+	var userStore storage.UserStore = &MockUserStore{}
+	mockMessageBroker := &MockMessageBroker{}
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", contentServer.URL, gamificationServer.URL)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{gin.Param{Key: "userId", Value: "1"}}
+
+	c.Request, _ = http.NewRequest(http.MethodGet, "/users/1/full-profile", nil)
+
+	apiHandler.GetFullProfileHandler(c)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d; got %d", http.StatusInternalServerError, w.Code)
+	}
+
+	var responseBody map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &responseBody); err != nil {
+		t.Fatalf("Failed to decode response body: %v", err)
+	}
+
+	expectedError := "Failed to retrieve full user profile due to an error with a downstream service."
+	if responseBody["error"] != expectedError {
+		t.Errorf("expected error message '%s'; got '%s'", expectedError, responseBody["error"])
+	}
 }
 
 func TestResetPasswordHandler(t *testing.T) {
