@@ -52,6 +52,14 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_activities (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    activity_type VARCHAR(255) NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 */
 
 // PostgresUserStore handles database operations for users.
@@ -355,4 +363,41 @@ func (s *PostgresUserStore) GetQuizAttemptsForUser(ctx context.Context, userID i
 		attempts = append(attempts, attempt)
 	}
 	return attempts, nil
+}
+
+// --- User Activity Storage Functions ---
+
+// CreateUserActivity creates a new user activity record in the database.
+func (s *PostgresUserStore) CreateUserActivity(ctx context.Context, activity *model.UserActivity) error {
+	query := `
+		INSERT INTO user_activities (user_id, activity_type, metadata)
+		VALUES ($1, $2, $3)
+	`
+	_, err := s.db.Exec(ctx, query, activity.UserID, activity.ActivityType, activity.Metadata)
+	return err
+}
+
+// GetUserActivities retrieves all activity records for a given user.
+func (s *PostgresUserStore) GetUserActivities(ctx context.Context, userID int64) ([]*model.UserActivity, error) {
+	query := `
+		SELECT id, user_id, activity_type, metadata, created_at
+		FROM user_activities
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+	rows, err := s.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var activities []*model.UserActivity
+	for rows.Next() {
+		var activity model.UserActivity
+		if err := rows.Scan(&activity.ID, &activity.UserID, &activity.ActivityType, &activity.Metadata, &activity.CreatedAt); err != nil {
+			return nil, err
+		}
+		activities = append(activities, &activity)
+	}
+	return activities, nil
 }

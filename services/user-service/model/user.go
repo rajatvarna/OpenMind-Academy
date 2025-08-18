@@ -80,3 +80,14 @@ type CreateQuizAttemptRequest struct {
 	Score   int    `json:"score" binding:"required"`
 	Answers string `json:"answers" binding:"required"`
 }
+
+// --- User Activity Structs ---
+
+// UserActivity represents a single action taken by a user.
+type UserActivity struct {
+	ID           int64                  `json:"id"`
+	UserID       int64                  `json:"user_id"`
+	ActivityType string                 `json:"activity_type"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+}

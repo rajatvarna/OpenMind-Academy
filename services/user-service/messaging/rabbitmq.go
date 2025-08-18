@@ -57,6 +57,44 @@ func (c *RabbitMQClient) Publish(ctx context.Context, queueName string, eventTyp
 	return nil
 }
 
+// Consume starts consuming messages from a queue and passes them to the handler.
+func (c *RabbitMQClient) Consume(ctx context.Context, queueName string, handler MessageHandler) error {
+	q, err := c.channel.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	if err != nil {
+		return err
+	}
+
+	msgs, err := c.channel.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for d := range msgs {
+			log.Printf("Received a message: %s", d.Body)
+			handler(d.Body)
+		}
+	}()
+
+	log.Printf(" [*] Waiting for messages in %s. To exit press CTRL+C", q.Name)
+	return nil
+}
+
 // Close closes the RabbitMQ connection and channel.
 func (c *RabbitMQClient) Close() {
 	if c.channel != nil {

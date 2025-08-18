@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/free-education/user-service/api"
 	"github.com/free-education/user-service/messaging"
+	"github.com/free-education/user-service/model"
 	"github.com/free-education/user-service/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -52,6 +54,26 @@ func main() {
 		log.Fatalf("Unable to connect to RabbitMQ: %v\n", err)
 	}
 	defer messageBroker.Close()
+
+	// --- Start RabbitMQ Consumer for User Activities ---
+	activityHandler := func(body []byte) {
+		var event struct {
+			EventType string             `json:"eventType"`
+			Payload   model.UserActivity `json:"payload"`
+		}
+		if err := json.Unmarshal(body, &event); err != nil {
+			log.Printf("Error unmarshalling activity event: %v", err)
+			return
+		}
+
+		// We only care about the payload, which should be a UserActivity
+		if err := userStore.CreateUserActivity(context.Background(), &event.Payload); err != nil {
+			log.Printf("Error creating user activity: %v", err)
+		}
+	}
+	if err := messageBroker.Consume(context.Background(), "user_activity_events", activityHandler); err != nil {
+		log.Fatalf("Failed to start user activity consumer: %v", err)
+	}
 
 	frontendBaseURL := os.Getenv("FRONTEND_BASE_URL")
 	if frontendBaseURL == "" {
@@ -105,6 +127,7 @@ func main() {
 			authenticated.GET("/users/:userId/progress", apiHandler.GetProgressHandler)
 			authenticated.POST("/users/:userId/progress", apiHandler.MarkLessonCompleteHandler)
 			authenticated.GET("/users/:userId/quiz-attempts", apiHandler.GetQuizAttemptsForUserHandler)
+			authenticated.GET("/users/:userId/activity", apiHandler.GetUserActivityHandler)
 			authenticated.GET("/users/:userId/full-profile", apiHandler.GetFullProfileHandler)
 
 			// Authenticated routes - specific to the user

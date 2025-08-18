@@ -8,6 +8,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const [profileData, setProfileData] = useState(null);
   const [quizAttempts, setQuizAttempts] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -19,9 +20,10 @@ export default function ProfilePage() {
       const fetchData = async () => {
         setIsLoading(true);
         try {
-          const [profileRes, attemptsRes] = await Promise.all([
+          const [profileRes, attemptsRes, activitiesRes] = await Promise.all([
             fetch(`/api/profile/${user.id}`),
             fetch(`/api/profile/quiz-attempts?userId=${user.id}`),
+            fetch(`/api/users/${user.id}/activity`),
           ]);
 
           if (profileRes.ok) {
@@ -31,6 +33,10 @@ export default function ProfilePage() {
           if (attemptsRes.ok) {
             const data = await attemptsRes.json();
             setQuizAttempts(data);
+          }
+          if (activitiesRes.ok) {
+            const data = await activitiesRes.json();
+            setActivities(data);
           }
         } catch (error) {
           console.error("Failed to fetch profile data", error);
@@ -109,6 +115,31 @@ export default function ProfilePage() {
           <div className="bg-white rounded-lg shadow-md p-4 text-center text-gray-500">
             {/* Here we would map over profileData.created_courses and display them */}
             <p>A list of your created courses would appear here.</p>
+          </div>
+        </div>
+
+        <div className="mt-12">
+          <h2 className="text-3xl font-bold mb-6">Recent Activity</h2>
+          <div className="bg-white rounded-lg shadow-md">
+            <ul className="divide-y divide-gray-200">
+              {activities && activities.length > 0 ? (
+                activities.map(activity => (
+                  <li key={activity.id} className="p-4">
+                    <p className="font-semibold">{activity.activity_type}</p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(activity.created_at).toLocaleString()}
+                    </p>
+                    {activity.metadata && (
+                      <pre className="text-xs bg-gray-100 p-2 mt-2 rounded">
+                        {JSON.stringify(activity.metadata, null, 2)}
+                      </pre>
+                    )}
+                  </li>
+                ))
+              ) : (
+                <li className="p-4 text-center text-gray-500">No recent activity.</li>
+              )}
+            </ul>
           </div>
         </div>
       </main>

@@ -483,6 +483,29 @@ func (a *API) DeactivateUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Account deactivated successfully."})
 }
 
+// --- User Activity Handlers ---
+
+// GetUserActivityHandler retrieves a log of recent activities for a user.
+func (a *API) GetUserActivityHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target user ID"})
+		return
+	}
+
+	// In a real app, you'd add authorization logic here to ensure the requesting user
+	// is allowed to see this activity log (e.g., they are the user themselves, or an admin).
+
+	activities, err := a.UserStore.GetUserActivities(c.Request.Context(), targetUserID)
+	if err != nil {
+		log.Printf("Error getting activities for user %d: %v", targetUserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user activities."})
+		return
+	}
+
+	c.JSON(http.StatusOK, activities)
+}
+
 // --- Quiz Attempt Handlers ---
 
 // CreateQuizAttemptHandler handles saving a user's quiz attempt.

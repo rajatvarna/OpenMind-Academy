@@ -26,4 +26,8 @@ type UserStore interface {
 	MarkLessonAsComplete(ctx context.Context, userID int64, lessonID int64) error
 	CreateQuizAttempt(ctx context.Context, attempt *model.CreateQuizAttemptRequest, userID int64) (*model.QuizAttempt, error)
 	GetQuizAttemptsForUser(ctx context.Context, userID int64) ([]model.QuizAttempt, error)
+
+	// User Activity
+	CreateUserActivity(ctx context.Context, activity *model.UserActivity) error
+	GetUserActivities(ctx context.Context, userID int64) ([]*model.UserActivity, error)
 }

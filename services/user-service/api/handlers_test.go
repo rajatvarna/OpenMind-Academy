@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/free-education/user-service/auth"
+	"github.com/free-education/user-service/messaging"
 	"github.com/free-education/user-service/model"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -26,16 +27,18 @@ import (
 
 // MockUserStore is a mock implementation of the UserStore with an in-memory map.
 type MockUserStore struct {
-	users     map[int64]*model.User
-	emailToID map[string]int64
-	nextID    int64
+	users               map[int64]*model.User
+	emailToID           map[string]int64
+	passwordResetTokens map[string]int64 // token -> userID
+	nextID              int64
 }
 
 func NewMockUserStore() *MockUserStore {
 	return &MockUserStore{
-		users:     make(map[int64]*model.User),
-		emailToID: make(map[string]int64),
-		nextID:    1,
+		users:               make(map[int64]*model.User),
+		emailToID:           make(map[string]int64),
+		passwordResetTokens: make(map[string]int64),
+		nextID:              1,
 	}
 }
 
@@ -91,12 +94,18 @@ func (m *MockUserStore) Get2FAData(ctx context.Context, userID int64) (string, b
 	return "", false, nil
 }
 func (m *MockUserStore) CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error {
+	m.passwordResetTokens[token] = userID
 	return nil
 }
 func (m *MockUserStore) GetUserByPasswordResetToken(ctx context.Context, token string) (*model.User, error) {
-	return nil, nil
+	userID, ok := m.passwordResetTokens[token]
+	if !ok {
+		return nil, errors.New("token not found")
+	}
+	return m.GetUserByID(ctx, userID)
 }
 func (m *MockUserStore) DeletePasswordResetToken(ctx context.Context, token string) error {
+	delete(m.passwordResetTokens, token)
 	return nil
 }
 func (m *MockUserStore) UpdatePassword(ctx context.Context, userID int64, newPassword string) error {
@@ -116,11 +125,21 @@ func (m *MockUserStore) CreateQuizAttempt(ctx context.Context, attempt *model.Cr
 func (m *MockUserStore) GetQuizAttemptsForUser(ctx context.Context, userID int64) ([]model.QuizAttempt, error) {
 	return nil, nil
 }
+func (m *MockUserStore) CreateUserActivity(ctx context.Context, activity *model.UserActivity) error {
+	return nil
+}
+func (m *MockUserStore) GetUserActivities(ctx context.Context, userID int64) ([]*model.UserActivity, error) {
+	return []*model.UserActivity{}, nil
+}
 
 // MockMessageBroker is a mock implementation of the MessageBroker.
 type MockMessageBroker struct{}
 
 func (m *MockMessageBroker) Publish(ctx context.Context, queueName string, eventType string, payload interface{}) error {
+	return nil
+}
+
+func (m *MockMessageBroker) Consume(ctx context.Context, queueName string, handler messaging.MessageHandler) error {
 	return nil
 }
 
@@ -192,6 +211,26 @@ func TestForgotPasswordHandler(t *testing.T) {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
 		}
 	})
+}
+
+func TestGetUserActivityHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userStore := NewMockUserStore()
+	mockMessageBroker := &MockMessageBroker{}
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{gin.Param{Key: "userId", Value: "1"}}
+
+	c.Request, _ = http.NewRequest(http.MethodGet, "/users/1/activity", nil)
+
+	apiHandler.GetUserActivityHandler(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+	}
 }
 
 func TestDeactivateUserHandler(t *testing.T) {
@@ -423,6 +462,8 @@ func TestResetPasswordHandler(t *testing.T) {
 
 	t.Run("Successful password reset", func(t *testing.T) {
 		userStore := NewMockUserStore()
+		user, _ := userStore.CreateUser(context.Background(), &model.RegistrationRequest{Email: "test@example.com", Password: "password"})
+		userStore.CreatePasswordResetToken(context.Background(), user.ID, "valid-token", time.Now().Add(time.Hour))
 		mockMessageBroker := &MockMessageBroker{}
 		apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
 
