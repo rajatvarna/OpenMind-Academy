@@ -7,18 +7,17 @@ import (
 	"strconv"
 
 	"github.com/free-education/content-service/model"
-	"github.com/free-education/content-service/storage"
 	"github.com/gin-gonic/gin"
 )
 
 // API holds the dependencies for the API handlers.
 type API struct {
-	ContentStore *storage.ContentStore
+	ContentStore ContentStore
 	QnAServiceURL string
 }
 
 // NewAPI creates a new API struct.
-func NewAPI(store *storage.ContentStore, qnaServiceURL string) *API {
+func NewAPI(store ContentStore, qnaServiceURL string) *API {
 	return &API{ContentStore: store, QnAServiceURL: qnaServiceURL}
 }
 
