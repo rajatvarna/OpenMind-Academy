@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"time"
@@ -239,6 +240,51 @@ func (a *API) UpdateUserPreferencesHandler(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// uploadToCloudStorage is a placeholder for a real cloud storage upload function.
+// In a real application, this would use the AWS, GCS, or Azure SDK to upload the file
+// and would require proper error handling and configuration.
+func uploadToCloudStorage(fileHeader *multipart.FileHeader) (string, error) {
+	// For this example, we'll just simulate an upload and return a fake URL.
+	// We'll use the filename to make the URL unique.
+	// In a real app, you would generate a unique ID (e.g., a UUID) for the filename
+	// to prevent collisions.
+	log.Printf("Simulating upload for file: %s", fileHeader.Filename)
+	fakeURL := fmt.Sprintf("https://storage.example.com/profiles/%d-%s", time.Now().UnixNano(), fileHeader.Filename)
+	return fakeURL, nil
+}
+
+// UploadProfilePictureHandler handles the profile picture upload process.
+func (a *API) UploadProfilePictureHandler(c *gin.Context) {
+	userID := c.MustGet("userID").(int64)
+
+	file, err := c.FormFile("picture")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File not provided or invalid."})
+		return
+	}
+
+	// In a real application, you would add more validation here:
+	// - Check file size
+	// - Check file type (e.g., only allow jpeg, png)
+
+	// Upload the file to cloud storage (using our mock function)
+	url, err := uploadToCloudStorage(file)
+	if err != nil {
+		log.Printf("Error uploading file for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file."})
+		return
+	}
+
+	// Update the user's profile picture URL in the database
+	if err := a.UserStore.UpdateProfilePictureURL(c.Request.Context(), userID, url); err != nil {
+		log.Printf("Error updating profile picture URL for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile picture URL."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Profile picture updated successfully.", "url": url})
 }
 
 // --- Quiz Attempt Handlers ---

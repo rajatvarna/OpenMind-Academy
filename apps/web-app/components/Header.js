@@ -34,8 +34,13 @@ const Header = () => {
             {loading ? null : user ? (
               <>
                 <Link href="/profile" legacyBehavior>
-                  <a className="text-gray-800 font-semibold">
-                    Hello, {user.name} (⭐ {stats.score || 0})
+                  <a className="flex items-center space-x-2 text-gray-800 font-semibold">
+                    <img
+                      src={user.profile_picture_url || 'https://via.placeholder.com/32'}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full"
+                    />
+                    <span>Hello, {user.name} (⭐ {stats.score || 0})</span>
                   </a>
                 </Link>
                 <Link href="/settings" legacyBehavior><a className="text-gray-600 hover:text-blue-600">Settings</a></Link>

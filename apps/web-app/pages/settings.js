@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/Settings.module.css';
+import ProfilePictureUploader from '../components/ProfilePictureUploader';
 
 export default function SettingsPage() {
   const { user, refetchUser } = useAuth();
@@ -46,6 +47,11 @@ export default function SettingsPage() {
     }
   };
 
+  const handleUploadSuccess = () => {
+    // Refetch user data to get the new profile picture URL
+    refetchUser();
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -64,6 +70,12 @@ export default function SettingsPage() {
           <option value="light">Light</option>
           <option value="dark">Dark</option>
         </select>
+      </div>
+
+      <div className={styles.settingsForm}>
+        <h2>Profile Picture</h2>
+        <p>Upload a new profile picture.</p>
+        <ProfilePictureUploader onUploadSuccess={handleUploadSuccess} />
       </div>
     </div>
   );

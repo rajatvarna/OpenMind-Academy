@@ -7,9 +7,12 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,6 +42,9 @@ func (m *MockUserStore) GetUserByID(ctx context.Context, userID int64) (*model.U
 	return nil, nil // Simulate user not found
 }
 func (m *MockUserStore) UpdateUserPreferences(ctx context.Context, userID int64, prefs map[string]interface{}) error {
+	return nil
+}
+func (m *MockUserStore) UpdateProfilePictureURL(ctx context.Context, userID int64, url string) error {
 	return nil
 }
 func (m *MockUserStore) CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error {
@@ -145,6 +151,57 @@ func TestForgotPasswordHandler(t *testing.T) {
 			t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
 		}
 	})
+}
+
+func TestUploadProfilePictureHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var userStore storage.UserStore = &MockUserStore{}
+	mockMessageBroker := &MockMessageBroker{}
+	apiHandler := NewAPI(userStore, mockMessageBroker, "", "", "")
+
+	// Create a buffer to store our request body
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Create a new form-data header
+	part, err := writer.CreateFormFile("picture", "test.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a fake file to the form-data header
+	_, err = io.Copy(part, strings.NewReader("fake image data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer.Close()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", int64(1)) // Set user ID in context
+
+	c.Request, _ = http.NewRequest(http.MethodPost, "/profile/picture", body)
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	apiHandler.UploadProfilePictureHandler(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d; got %d", http.StatusOK, w.Code)
+	}
+
+	var responseBody map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &responseBody); err != nil {
+		t.Fatalf("Failed to decode response body: %v", err)
+	}
+
+	if responseBody["message"] != "Profile picture updated successfully." {
+		t.Errorf("expected success message; got '%s'", responseBody["message"])
+	}
+
+	if !strings.HasPrefix(responseBody["url"], "https://storage.example.com/profiles/") {
+		t.Errorf("expected URL with prefix; got '%s'", responseBody["url"])
+	}
 }
 
 func TestGetFullProfileHandler(t *testing.T) {

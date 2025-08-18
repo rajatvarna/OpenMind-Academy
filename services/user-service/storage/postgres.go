@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
+    profile_picture_url TEXT,
     role VARCHAR(50) NOT NULL DEFAULT 'user', -- 'user', 'moderator', 'admin'
     preferences JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -198,6 +199,17 @@ func (s *PostgresUserStore) UpdateUserPreferences(ctx context.Context, userID in
 		WHERE id = $2
 	`
 	_, err := s.db.Exec(ctx, query, prefs, userID)
+	return err
+}
+
+// UpdateProfilePictureURL updates the profile_picture_url for a given user.
+func (s *PostgresUserStore) UpdateProfilePictureURL(ctx context.Context, userID int64, url string) error {
+	query := `
+		UPDATE users
+		SET profile_picture_url = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := s.db.Exec(ctx, query, url, userID)
 	return err
 }
 

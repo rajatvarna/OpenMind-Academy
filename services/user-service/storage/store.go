@@ -13,6 +13,7 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
 	GetUserByID(ctx context.Context, userID int64) (*model.User, error)
 	UpdateUserPreferences(ctx context.Context, userID int64, prefs map[string]interface{}) error
+	UpdateProfilePictureURL(ctx context.Context, userID int64, url string) error
 	CreatePasswordResetToken(ctx context.Context, userID int64, token string, expiresAt time.Time) error
 	GetUserByPasswordResetToken(ctx context.Context, token string) (*model.User, error)
 	DeletePasswordResetToken(ctx context.Context, token string) error

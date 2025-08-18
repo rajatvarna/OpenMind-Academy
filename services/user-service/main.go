@@ -93,6 +93,7 @@ func main() {
 		authenticated.Use(api.AuthMiddleware())
 		{
 			authenticated.GET("/profile", apiHandler.GetProfileHandler)
+			authenticated.POST("/profile/picture", apiHandler.UploadProfilePictureHandler)
 			authenticated.GET("/preferences", apiHandler.GetUserPreferencesHandler)
 			authenticated.PUT("/preferences", apiHandler.UpdateUserPreferencesHandler)
 			authenticated.GET("/users/:userId/progress", apiHandler.GetProgressHandler)

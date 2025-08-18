@@ -56,7 +56,14 @@ export default function ProfilePage() {
         <title>Your Profile</title>
       </Head>
       <main>
-        <h1 className="text-4xl font-bold mb-8">{user.name}'s Profile</h1>
+        <div className="flex items-center space-x-6 mb-8">
+          <img
+            src={user.profile_picture_url || 'https://via.placeholder.com/128'}
+            alt="Profile Picture"
+            className="w-32 h-32 rounded-full"
+          />
+          <h1 className="text-4xl font-bold">{user.name}'s Profile</h1>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="p-6 bg-white rounded-lg shadow-md text-center">
             <h3 className="text-xl font-semibold text-gray-700">Total Score</h3>

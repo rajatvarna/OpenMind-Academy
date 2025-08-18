@@ -15,6 +15,8 @@ type User struct {
 	FirstName string `json:"first_name"`
 	// The user's last name.
 	LastName string `json:"last_name"`
+	// The URL to the user's profile picture. Can be empty.
+	ProfilePictureURL string `json:"profile_picture_url,omitempty"`
 	// The role of the user (e.g., 'user', 'admin'). Determines permissions.
 	Role string `json:"role"`
 	// A flexible JSONB field for storing user-specific settings, like theme.
